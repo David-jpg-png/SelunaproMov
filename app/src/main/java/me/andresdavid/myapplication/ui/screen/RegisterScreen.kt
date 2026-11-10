@@ -80,7 +80,10 @@ enum class UserGoal {
 }
 
 @Composable
-fun RegisterScreen() {
+fun RegisterScreen(
+    onNavigateToLogin: () -> Unit = {},
+    onNavigateToNaturalRhythm: () -> Unit = {}
+) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("SelunaHarmony2024!") }
@@ -110,7 +113,7 @@ fun RegisterScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { /* Handle back press */ }) {
+                IconButton(onClick = onNavigateToLogin) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Volver",
@@ -751,7 +754,7 @@ fun RegisterScreen() {
 
             // Crear Cuenta Button
             Button(
-                onClick = { /* Handle create account */ },
+                onClick = onNavigateToNaturalRhythm,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -814,7 +817,7 @@ fun RegisterScreen() {
                     modifier = Modifier
                         .weight(1f)
                         .height(46.dp)
-                        .clickable { /* Google sign up */ },
+                        .clickable { onNavigateToNaturalRhythm() },
                     shape = CircleShape,
                     color = Color.White,
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0E6E8))
@@ -845,7 +848,7 @@ fun RegisterScreen() {
                     modifier = Modifier
                         .weight(1f)
                         .height(46.dp)
-                        .clickable { /* Apple sign up */ },
+                        .clickable { onNavigateToNaturalRhythm() },
                     shape = CircleShape,
                     color = Color.White,
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0E6E8))
@@ -891,7 +894,7 @@ fun RegisterScreen() {
                     fontWeight = FontWeight.Bold,
                     textDecoration = TextDecoration.Underline,
                     color = Color(0xFF33262A),
-                    modifier = Modifier.clickable { /* Navigate to login */ }
+                    modifier = Modifier.clickable { onNavigateToLogin() }
                 )
             }
 

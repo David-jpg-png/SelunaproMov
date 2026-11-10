@@ -61,7 +61,10 @@ import androidx.compose.ui.unit.sp
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 
 @Composable
-fun CalendarScreen() {
+fun CalendarScreen(
+    onNavigateToTab: (Int) -> Unit = {},
+    onNavigateToDailyLog: () -> Unit = {}
+) {
     var selectedBottomNav by remember { mutableIntStateOf(1) } // "Calendario" tab selected
 
     Scaffold(
@@ -72,7 +75,7 @@ fun CalendarScreen() {
             ) {
                 NavigationBarItem(
                     selected = selectedBottomNav == 0,
-                    onClick = { selectedBottomNav = 0 },
+                    onClick = { onNavigateToTab(0) },
                     icon = { Icon(Icons.Outlined.AccessTime, contentDescription = "Hoy") },
                     label = { Text("Hoy", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 0) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -85,7 +88,10 @@ fun CalendarScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 1,
-                    onClick = { selectedBottomNav = 1 },
+                    onClick = {
+                        selectedBottomNav = 1
+                        onNavigateToTab(1)
+                    },
                     icon = { Icon(Icons.Outlined.CalendarToday, contentDescription = "Calendario") },
                     label = { Text("Calendario", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 1) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -98,7 +104,7 @@ fun CalendarScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 2,
-                    onClick = { selectedBottomNav = 2 },
+                    onClick = { onNavigateToTab(2) },
                     icon = { Icon(Icons.Outlined.Insights, contentDescription = "Estadísticas") },
                     label = { Text("Estadísticas", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 2) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -111,7 +117,7 @@ fun CalendarScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 3,
-                    onClick = { selectedBottomNav = 3 },
+                    onClick = { onNavigateToTab(3) },
                     icon = { Icon(Icons.Outlined.EditNote, contentDescription = "Registro") },
                     label = { Text("Registro", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 3) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -520,7 +526,7 @@ fun CalendarScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
-                        .clickable { /* Edit period action */ },
+                        .clickable { onNavigateToDailyLog() },
                     shape = CircleShape,
                     color = Color(0xFFFFF0F3)
                 ) {

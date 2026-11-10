@@ -161,7 +161,11 @@ val PlantSproutIcon: ImageVector = ImageVector.Builder(
 }.build()
 
 @Composable
-fun LoginScreen() {
+fun LoginScreen(
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToRegister: () -> Unit = {},
+    onNavigateBack: () -> Unit = {}
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -189,7 +193,7 @@ fun LoginScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { /* Handle back press */ }) {
+                IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Volver",
@@ -569,7 +573,7 @@ fun LoginScreen() {
 
                     // Iniciar Sesión Button
                     Button(
-                        onClick = { /* Handle login */ },
+                        onClick = onNavigateToHome,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -634,7 +638,7 @@ fun LoginScreen() {
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp)
-                                .clickable { /* Apple login */ },
+                                .clickable { onNavigateToHome() },
                             shape = CircleShape,
                             color = Color(0xFFFFF0F3)
                         ) {
@@ -664,7 +668,7 @@ fun LoginScreen() {
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp)
-                                .clickable { /* Google login */ },
+                                .clickable { onNavigateToHome() },
                             shape = CircleShape,
                             color = Color(0xFFFFF0F3)
                         ) {
@@ -710,7 +714,7 @@ fun LoginScreen() {
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF805C6B),
-                    modifier = Modifier.clickable { /* Navigate to register */ }
+                    modifier = Modifier.clickable { onNavigateToRegister() }
                 )
             }
 

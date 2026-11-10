@@ -79,7 +79,10 @@ enum class FlowLevel(val label: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DailyLogScreen() {
+fun DailyLogScreen(
+    onNavigateToTab: (Int) -> Unit = {},
+    onSaveLog: () -> Unit = {}
+) {
     var selectedBottomNav by remember { mutableIntStateOf(3) } // "Registro" tab selected
     var flowLevel by remember { mutableStateOf(FlowLevel.LIGHT) }
     var selectedSymptoms by remember { mutableStateOf(setOf("Cólicos", "Dolor de cabeza", "Fatiga")) }
@@ -95,7 +98,7 @@ fun DailyLogScreen() {
             ) {
                 NavigationBarItem(
                     selected = selectedBottomNav == 0,
-                    onClick = { selectedBottomNav = 0 },
+                    onClick = { onNavigateToTab(0) },
                     icon = { Icon(Icons.Outlined.AccessTime, contentDescription = "Hoy") },
                     label = { Text("Hoy", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 0) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -108,7 +111,7 @@ fun DailyLogScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 1,
-                    onClick = { selectedBottomNav = 1 },
+                    onClick = { onNavigateToTab(1) },
                     icon = { Icon(Icons.Outlined.CalendarToday, contentDescription = "Calendario") },
                     label = { Text("Calendario", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 1) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -121,7 +124,7 @@ fun DailyLogScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 2,
-                    onClick = { selectedBottomNav = 2 },
+                    onClick = { onNavigateToTab(2) },
                     icon = { Icon(Icons.Outlined.Insights, contentDescription = "Estadísticas") },
                     label = { Text("Estadísticas", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 2) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -134,7 +137,10 @@ fun DailyLogScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 3,
-                    onClick = { selectedBottomNav = 3 },
+                    onClick = {
+                        selectedBottomNav = 3
+                        onNavigateToTab(3)
+                    },
                     icon = { Icon(Icons.Outlined.EditNote, contentDescription = "Registro") },
                     label = { Text("Registro", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 3) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -681,7 +687,7 @@ fun DailyLogScreen() {
 
                 // Primary Action Button: ✓ Guardar Registro
                 Button(
-                    onClick = { /* Save log action */ },
+                    onClick = onSaveLog,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),

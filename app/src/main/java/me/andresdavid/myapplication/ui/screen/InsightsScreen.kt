@@ -74,7 +74,9 @@ import androidx.compose.ui.unit.sp
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 
 @Composable
-fun InsightsScreen() {
+fun InsightsScreen(
+    onNavigateToTab: (Int) -> Unit = {}
+) {
     var selectedBottomNav by remember { mutableIntStateOf(2) } // "Estadísticas" tab selected
 
     Scaffold(
@@ -85,7 +87,7 @@ fun InsightsScreen() {
             ) {
                 NavigationBarItem(
                     selected = selectedBottomNav == 0,
-                    onClick = { selectedBottomNav = 0 },
+                    onClick = { onNavigateToTab(0) },
                     icon = { Icon(Icons.Outlined.AccessTime, contentDescription = "Hoy") },
                     label = { Text("Hoy", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 0) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -98,7 +100,7 @@ fun InsightsScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 1,
-                    onClick = { selectedBottomNav = 1 },
+                    onClick = { onNavigateToTab(1) },
                     icon = { Icon(Icons.Outlined.CalendarToday, contentDescription = "Calendario") },
                     label = { Text("Calendario", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 1) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -111,7 +113,10 @@ fun InsightsScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 2,
-                    onClick = { selectedBottomNav = 2 },
+                    onClick = {
+                        selectedBottomNav = 2
+                        onNavigateToTab(2)
+                    },
                     icon = { Icon(Icons.Outlined.Insights, contentDescription = "Estadísticas") },
                     label = { Text("Estadísticas", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 2) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(
@@ -124,7 +129,7 @@ fun InsightsScreen() {
                 )
                 NavigationBarItem(
                     selected = selectedBottomNav == 3,
-                    onClick = { selectedBottomNav = 3 },
+                    onClick = { onNavigateToTab(3) },
                     icon = { Icon(Icons.Outlined.EditNote, contentDescription = "Registro") },
                     label = { Text("Registro", fontSize = 11.sp, fontWeight = if (selectedBottomNav == 3) FontWeight.Bold else FontWeight.Normal) },
                     colors = NavigationBarItemDefaults.colors(

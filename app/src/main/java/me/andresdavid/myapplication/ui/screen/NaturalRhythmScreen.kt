@@ -101,7 +101,11 @@ enum class ContraceptiveType {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun NaturalRhythmScreen() {
+fun NaturalRhythmScreen(
+    onNavigateToPersonalization: () -> Unit = {},
+    onNavigateToHome: () -> Unit = {},
+    onNavigateBack: () -> Unit = {}
+) {
     var selectedApproach by remember { mutableStateOf(CycleApproach.TRACK_CYCLE) }
     var selectedRegularity by remember { mutableStateOf(CycleRegularity.REGULAR) }
     var selectedContraceptive by remember { mutableStateOf(ContraceptiveType.NONE) }
@@ -130,7 +134,7 @@ fun NaturalRhythmScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { /* Back action */ }) {
+                IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Volver",
@@ -1062,7 +1066,7 @@ fun NaturalRhythmScreen() {
 
             // Primary Button: Continuar a Personalización →
             Button(
-                onClick = { /* Handle continue */ },
+                onClick = onNavigateToPersonalization,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -1100,7 +1104,7 @@ fun NaturalRhythmScreen() {
                 color = Color(0xFF8C7F84),
                 modifier = Modifier
                     .padding(bottom = 16.dp)
-                    .clickable { /* Skip action */ }
+                    .clickable { onNavigateToHome() }
             )
         }
     }

@@ -70,7 +70,10 @@ data class PersonalizationPriority(
 )
 
 @Composable
-fun PersonalizationScreen() {
+fun PersonalizationScreen(
+    onNavigateToHome: () -> Unit = {},
+    onNavigateBack: () -> Unit = {}
+) {
     val priorities = listOf(
         PersonalizationPriority(
             id = "period_prediction",
@@ -137,7 +140,7 @@ fun PersonalizationScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { /* Handle back press */ }) {
+                IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Volver",
@@ -471,7 +474,7 @@ fun PersonalizationScreen() {
 
             // Primary Button: Guardar y Comenzar →
             Button(
-                onClick = { /* Handle save & start */ },
+                onClick = onNavigateToHome,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
