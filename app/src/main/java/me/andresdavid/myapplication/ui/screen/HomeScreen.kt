@@ -2,7 +2,6 @@ package me.andresdavid.myapplication.ui.screen
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -23,24 +21,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.LocalCafe
+import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -48,12 +43,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,7 +63,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.andresdavid.myapplication.data.DailyLogItem
+import me.andresdavid.myapplication.data.FirebaseRepository
+import me.andresdavid.myapplication.data.UserProfile
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -78,18 +80,77 @@ fun HomeScreen(
     onNavigateToDailyLog: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(0) }
-    var userName by remember { mutableStateOf("Isabella") }
-    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
+    var userProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var todayLog by remember { mutableStateOf<DailyLogItem?>(null) }
 
     LaunchedEffect(Unit) {
-        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
-        if (profile != null) {
-            userProfile = profile
-            if (profile.name.isNotBlank()) {
-                userName = profile.name
-            }
-        }
+        val profile = FirebaseRepository.getUserProfile()
+        userProfile = profile
+        val logs = FirebaseRepository.getDailyLogs()
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        todayLog = logs.find { it.date == todayStr } ?: logs.maxByOrNull { it.timestamp }
     }
+
+    // Dynamic date string
+    val calendar = Calendar.getInstance()
+    val dayOfWeekStr = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+        Calendar.MONDAY -> "LUNES"
+        Calendar.TUESDAY -> "MARTES"
+        Calendar.WEDNESDAY -> "MIÉRCOLES"
+        Calendar.THURSDAY -> "JUEVES"
+        Calendar.FRIDAY -> "VIERNES"
+        Calendar.SATURDAY -> "SÁBADO"
+        Calendar.SUNDAY -> "DOMINGO"
+        else -> ""
+    }
+    val monthStr = when (calendar.get(Calendar.MONTH)) {
+        Calendar.JANUARY -> "ENERO"
+        Calendar.FEBRUARY -> "FEBRERO"
+        Calendar.MARCH -> "MARZO"
+        Calendar.APRIL -> "ABRIL"
+        Calendar.MAY -> "MAYO"
+        Calendar.JUNE -> "JUNIO"
+        Calendar.JULY -> "JULIO"
+        Calendar.AUGUST -> "AGOSTO"
+        Calendar.SEPTEMBER -> "SEPTIEMBRE"
+        Calendar.OCTOBER -> "OCTUBRE"
+        Calendar.NOVEMBER -> "NOVIEMBRE"
+        Calendar.DECEMBER -> "DICIEMBRE"
+        else -> ""
+    }
+    val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+    val formattedDate = "$dayOfWeekStr, $dayOfMonth DE $monthStr"
+
+    // Profile formatted labels
+    val userName = userProfile?.name?.ifBlank { "Usuario" } ?: "Usuario"
+
+    val approachLabel = when (userProfile?.approach) {
+        "CONCEIVE" -> "Buscando concebir"
+        "PREVENT_PREGNANCY" -> "Prevenir embarazo"
+        "TRACK_CYCLE" -> "Conocer y registrar mi ciclo"
+        else -> "Perfil Ginecológico"
+    }
+
+    val regularityLabel = when (userProfile?.regularity) {
+        "REGULAR" -> "Ciclo Regular"
+        "VARIES" -> "Ciclo Variable"
+        "NOT_SURE" -> "En evaluación"
+        else -> "Ciclo Regular"
+    }
+
+    val contraceptiveLabel = when (userProfile?.contraceptive) {
+        "PILLS" -> "Pastillas"
+        "IUD" -> "DIU"
+        "IMPLANT" -> "Implante"
+        "NONE" -> "Sin anticonceptivo"
+        else -> "Natural"
+    }
+
+    val periodDaysCount = if ((userProfile?.periodDays ?: 0) > 0) userProfile!!.periodDays else 5
+
+    val userConditions = userProfile?.conditions?.filter {
+        it != "Ninguna de las anteriores" && it.isNotBlank()
+    } ?: emptyList()
 
     Scaffold(
         bottomBar = {
@@ -160,7 +221,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .statusBarsPadding(),
-            color = Color(0xFFFDF8F9) // Light warm blush background
+            color = Color(0xFFFDF8F9)
         ) {
             Column(
                 modifier = Modifier
@@ -177,9 +238,8 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(modifier = Modifier.width(40.dp)) // Spacer for balance
+                    Spacer(modifier = Modifier.width(40.dp))
 
-                    // Brand Title
                     Text(
                         text = "Seluna",
                         fontSize = 20.sp,
@@ -212,7 +272,7 @@ fun HomeScreen(
                 ) {
                     Column {
                         Text(
-                            text = "LUNES, 24 DE OCTUBRE",
+                            text = formattedDate,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF8C7F84),
@@ -227,7 +287,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Escucha a tu cuerpo en su ritmo natural.",
+                            text = if (userProfile?.goal?.isNotBlank() == true) "Objetivo: ${userProfile!!.goal}" else "Escucha a tu cuerpo en su ritmo natural.",
                             fontSize = 13.sp,
                             color = Color(0xFF8C7F84)
                         )
@@ -238,8 +298,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFFF0F3))
-                            .clickable { /* Notification action */ },
+                            .background(Color(0xFFFFF0F3)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -266,7 +325,7 @@ fun HomeScreen(
                             .padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Top Badge: Fase Folicular Temprana
+                        // Top Badge: Dynamic Approach
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFFFFF0F3)
@@ -283,7 +342,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Fase Folicular Temprana",
+                                    text = approachLabel,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF6E565E)
@@ -304,7 +363,7 @@ fun HomeScreen(
                                 val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
                                 val arcSize = Size(diameter, diameter)
 
-                                // Segment 1: Menstruation Phase (Pink/Red Arc, top right)
+                                // Segment 1: Menstruation Phase
                                 drawArc(
                                     color = Color(0xFFF7C2D2),
                                     startAngle = -45f,
@@ -315,7 +374,7 @@ fun HomeScreen(
                                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                                 )
 
-                                // Segment 2: Follicular Phase (Mint/Green Arc)
+                                // Segment 2: Follicular Phase
                                 drawArc(
                                     color = Color(0xFFD3ECE1),
                                     startAngle = 35f,
@@ -326,7 +385,7 @@ fun HomeScreen(
                                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                                 )
 
-                                // Segment 3: Luteal Phase (Pale Blue Arc)
+                                // Segment 3: Luteal Phase
                                 drawArc(
                                     color = Color(0xFFE2EDF8),
                                     startAngle = 180f,
@@ -337,7 +396,7 @@ fun HomeScreen(
                                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                                 )
 
-                                // Current Day Indicator Dot on Ring (Left side at 180 degrees)
+                                // Indicator Dot
                                 val radius = diameter / 2
                                 val center = Offset(size.width / 2, size.height / 2)
                                 val angleRad = Math.toRadians(180.0)
@@ -361,7 +420,7 @@ fun HomeScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "MENSTRUACIÓN",
+                                    text = "PERIODO",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF8C7F84),
@@ -369,13 +428,13 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Día 3",
-                                    fontSize = 28.sp,
+                                    text = "$periodDaysCount días",
+                                    fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF33262A)
                                 )
                                 Text(
-                                    text = "de 28 días",
+                                    text = "de duracion",
                                     fontSize = 12.sp,
                                     color = Color(0xFF8C7F84)
                                 )
@@ -389,7 +448,7 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Left Badge: Próx. Ovulación
+                            // Left Badge: Regularidad
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(18.dp),
@@ -408,12 +467,12 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
                                         Text(
-                                            text = "Próx. Ovulación",
+                                            text = "Regularidad",
                                             fontSize = 11.sp,
                                             color = Color(0xFF8C7F84)
                                         )
                                         Text(
-                                            text = "En 10 días",
+                                            text = regularityLabel,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF33262A)
@@ -422,7 +481,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            // Right Badge: Fertilidad
+                            // Right Badge: Anticonceptivo
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(18.dp),
@@ -441,23 +500,64 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
                                         Text(
-                                            text = "Fertilidad",
+                                            text = "Método",
                                             fontSize = 11.sp,
                                             color = Color(0xFF386657)
                                         )
-                                        val fertText = when (userProfile?.approach) {
-                                            "CONCEIVE" -> "Alta probab."
-                                            "PREVENT_PREGNANCY" -> "Protección"
-                                            else -> "Baja probab."
-                                        }
                                         Text(
-                                            text = fertText,
+                                            text = contraceptiveLabel,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF2E594B)
                                         )
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Medical Conditions Card (Only if user has entered conditions)
+                if (userConditions.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 18.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFFAF0F3)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.MedicalServices,
+                                    contentDescription = null,
+                                    tint = Color(0xFF6B535E),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Diagnósticos registrados",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF33262A)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = userConditions.joinToString(", "),
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF6E565E)
+                                )
                             }
                         }
                     }
@@ -486,7 +586,7 @@ fun HomeScreen(
                     )
                 }
 
-                // 4 Quick Logging Cards Row
+                // 4 Quick Logging Cards Row (Shows REAL log values if entered, otherwise "Sin registro")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -494,11 +594,16 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Card 1: Síntomas
+                    val symptomsText = if (todayLog?.symptoms?.isNotEmpty() == true) {
+                        "${todayLog!!.symptoms.size} registrados"
+                    } else {
+                        "Sin registro"
+                    }
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .height(100.dp)
-                            .clickable { /* Action */ },
+                            .clickable { onNavigateToDailyLog() },
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFFF0F3FC)
                     ) {
@@ -521,23 +626,34 @@ fun HomeScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Síntomas",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = Color(0xFF33262A),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = symptomsText,
+                                fontSize = 10.sp,
+                                color = Color(0xFF8C7F84),
                                 textAlign = TextAlign.Center
                             )
                         }
                     }
 
                     // Card 2: Ánimo
+                    val moodText = if (todayLog?.moods?.isNotEmpty() == true) {
+                        todayLog!!.moods.first()
+                    } else {
+                        "Sin registro"
+                    }
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .height(100.dp)
-                            .clickable { /* Action */ },
+                            .clickable { onNavigateToDailyLog() },
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFFFFF0F3)
                     ) {
@@ -560,23 +676,34 @@ fun HomeScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Ánimo",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = Color(0xFF33262A),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = moodText,
+                                fontSize = 10.sp,
+                                color = Color(0xFF8C7F84),
                                 textAlign = TextAlign.Center
                             )
                         }
                     }
 
-                    // Card 3: Flujo: Medio
+                    // Card 3: Flujo
+                    val flowText = if (todayLog?.flowLevel?.isNotBlank() == true) {
+                        todayLog!!.flowLevel
+                    } else {
+                        "Sin registro"
+                    }
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .height(100.dp)
-                            .clickable { /* Action */ },
+                            .clickable { onNavigateToDailyLog() },
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFFFFEAEE)
                     ) {
@@ -599,24 +726,34 @@ fun HomeScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Flujo:\nMedio",
-                                fontSize = 10.sp,
+                                text = "Flujo",
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF33262A),
-                                textAlign = TextAlign.Center,
-                                lineHeight = 12.sp
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = flowText,
+                                fontSize = 10.sp,
+                                color = Color(0xFF8C7F84),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
 
-                    // Card 4: Agua 1.2L
+                    // Card 4: Medicación
+                    val medStatusText = when {
+                        todayLog?.medicationTaken == true -> "Tomada"
+                        userProfile?.contraceptive != null && userProfile?.contraceptive != "NONE" -> "Pendiente"
+                        else -> "Sin registro"
+                    }
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .height(100.dp)
-                            .clickable { /* Action */ },
+                            .clickable { onNavigateToDailyLog() },
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFFE5F5F0)
                     ) {
@@ -639,19 +776,25 @@ fun HomeScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Agua 1.2L",
+                                text = "Medicación",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = Color(0xFF33262A),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = medStatusText,
+                                fontSize = 10.sp,
+                                color = Color(0xFF2E594B),
                                 textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
 
-                // "CONSEJO DE SELUNA" Banner Card
+                // "CONSEJO DE SELUNA" Banner Card (Dynamic per User Profile & Conditions)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -682,18 +825,25 @@ fun HomeScreen(
 
                         Column {
                             Text(
-                                text = "CONSEJO DE SELUNA • Fase Folicular",
+                                text = "CONSEJO DE SELUNA • $userName",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF2E594B),
                                 letterSpacing = 0.5.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            val tipText = when (userProfile?.approach) {
-                                "CONCEIVE" -> "Te encuentras en periodo de seguimiento fértil. Monitorea temperatura basal y cambios de flujo para identificar la ventana de ovulación."
-                                "PREVENT_PREGNANCY" -> "Seluna recalibra tus días de mayor atención. Mantén hábitos de protección activa y registra síntomas diarios."
-                                else -> "Tu energía empieza a aumentar gradualmente. Es un momento propicio para caminatas ligeras, yoga restaurativo e hidratación constante con infusiones cálidas."
+
+                            val tipText = when {
+                                userConditions.isNotEmpty() ->
+                                    "Para tus condiciones de ${userConditions.joinToString()}: Prioriza hidratación constante, descanso restaurativo y actividades suaves."
+                                userProfile?.approach == "CONCEIVE" ->
+                                    "Tu enfoque es concebir: Registra diariamente tus sensaciones y monitorea tus ventanas de mayor fertilidad."
+                                userProfile?.approach == "PREVENT_PREGNANCY" ->
+                                    "Tu enfoque es prevenir embarazo: Revisa tus días clave y mantén al día tus registros de bienestar."
+                                else ->
+                                    "Sigue escuchando a tu cuerpo. Completa tus registros diarios para calibrar predicciones precisas con Seluna."
                             }
+
                             Text(
                                 text = tipText,
                                 fontSize = 12.sp,
@@ -719,7 +869,7 @@ fun HomeScreen(
                         color = Color(0xFF33262A)
                     )
                     Text(
-                        text = "Ciclo de 28 días",
+                        text = "Periodo de $periodDaysCount días",
                         fontSize = 12.sp,
                         color = Color(0xFF8C7F84)
                     )
@@ -732,18 +882,19 @@ fun HomeScreen(
                         .padding(bottom = 18.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
                     val days = listOf(
-                        Triple("S", "1", Color(0xFFFFF0F3)),
-                        Triple("D", "2", Color(0xFFFFF0F3)),
-                        Triple("L", "3", Color(0xFF33262A)), // Today
-                        Triple("M", "4", Color(0xFFE2F0EC)),
-                        Triple("M", "5", Color(0xFFE2F0EC)),
-                        Triple("J", "6", Color(0xFFFFF0F3)),
-                        Triple("V", "7", Color(0xFFE2EDF8))
+                        Triple("S", "${(currentDay - 2).coerceAtLeast(1)}", Color(0xFFFFF0F3)),
+                        Triple("D", "${(currentDay - 1).coerceAtLeast(1)}", Color(0xFFFFF0F3)),
+                        Triple("L", "$currentDay", Color(0xFF33262A)), // Today
+                        Triple("M", "${currentDay + 1}", Color(0xFFE2F0EC)),
+                        Triple("M", "${currentDay + 2}", Color(0xFFE2F0EC)),
+                        Triple("J", "${currentDay + 3}", Color(0xFFFFF0F3)),
+                        Triple("V", "${currentDay + 4}", Color(0xFFE2EDF8))
                     )
 
                     days.forEach { (dayLetter, dayNum, bgColor) ->
-                        val isToday = dayNum == "3"
+                        val isToday = dayNum == "$currentDay"
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
@@ -758,7 +909,7 @@ fun HomeScreen(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(bgColor),
+                                    .background(if (isToday) Color(0xFF33262A) else bgColor),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
