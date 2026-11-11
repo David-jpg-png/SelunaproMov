@@ -51,6 +51,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,6 +92,8 @@ fun RegisterScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var selectedGoal by remember { mutableStateOf(UserGoal.CYCLE_TRACKING) }
     var termsAccepted by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Surface(
         modifier = Modifier
@@ -752,9 +756,31 @@ fun RegisterScreen(
                 )
             }
 
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = Color.Red,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+            }
+
             // Crear Cuenta Button
             Button(
-                onClick = onNavigateToNaturalRhythm,
+                onClick = {
+                    scope.launch {
+                        if (name.isBlank() || email.isBlank() || password.isBlank()) {
+                            errorMessage = "Completa todos los campos"
+                            return@launch
+                        }
+                        val res = me.andresdavid.myapplication.data.FirebaseRepository.signUp(email, password, name, selectedGoal.name)
+                        if (res.isSuccess) {
+                            onNavigateToNaturalRhythm()
+                        } else {
+                            errorMessage = res.exceptionOrNull()?.localizedMessage ?: "Error al registrar"
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),

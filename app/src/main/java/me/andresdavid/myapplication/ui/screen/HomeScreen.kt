@@ -50,8 +50,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,6 +78,14 @@ fun HomeScreen(
     onNavigateToDailyLog: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(0) }
+    var userName by remember { mutableStateOf("Isabella") }
+
+    LaunchedEffect(Unit) {
+        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
+        if (profile != null && profile.name.isNotBlank()) {
+            userName = profile.name
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -206,7 +216,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "¡Hola, Isabella! 🌸",
+                            text = "¡Hola, $userName! 🌸",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF33262A)

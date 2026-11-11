@@ -46,6 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -170,6 +172,8 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Surface(
         modifier = Modifier
@@ -571,9 +575,31 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage!!,
+                            color = Color.Red,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                    }
+
                     // Iniciar Sesión Button
                     Button(
-                        onClick = onNavigateToHome,
+                        onClick = {
+                            scope.launch {
+                                if (email.isBlank() || password.isBlank()) {
+                                    errorMessage = "Ingresa correo y contraseña"
+                                    return@launch
+                                }
+                                val res = me.andresdavid.myapplication.data.FirebaseRepository.signIn(email, password)
+                                if (res.isSuccess) {
+                                    onNavigateToHome()
+                                } else {
+                                    errorMessage = res.exceptionOrNull()?.localizedMessage ?: "Credenciales inválidas"
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),

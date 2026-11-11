@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "308136598309",
+    "project_id": "selunaauth",
+    "storage_bucket": "selunaauth.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:308136598309:android:f91c73d0dab7ab1d7318cc",
+        "android_client_info": {
+          "package_name": "me.andresdavid.myapplication"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6wpWNNtULsoFjbO7f0wNnGt3IzmtFP9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

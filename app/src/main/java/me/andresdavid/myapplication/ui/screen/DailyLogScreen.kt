@@ -57,6 +57,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +91,7 @@ fun DailyLogScreen(
     var selectedMoods by remember { mutableStateOf(setOf("Tranquila")) }
     var medicationTaken by remember { mutableStateOf(true) }
     var notes by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         bottomBar = {
@@ -687,7 +690,24 @@ fun DailyLogScreen(
 
                 // Primary Action Button: ✓ Guardar Registro
                 Button(
-                    onClick = onSaveLog,
+                    onClick = {
+                        scope.launch {
+                            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                            val dateStr = dateFormat.format(java.util.Date())
+                            val item = me.andresdavid.myapplication.data.DailyLogItem(
+                                id = dateStr,
+                                date = dateStr,
+                                flowLevel = flowLevel.label,
+                                symptoms = selectedSymptoms.toList(),
+                                moods = selectedMoods.toList(),
+                                medicationTaken = medicationTaken,
+                                notes = notes,
+                                timestamp = System.currentTimeMillis()
+                            )
+                            me.andresdavid.myapplication.data.FirebaseRepository.saveDailyLog(item)
+                            onSaveLog()
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
