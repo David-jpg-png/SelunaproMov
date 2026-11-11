@@ -44,10 +44,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -117,6 +120,16 @@ fun PersonalizationScreen(
         mutableStateOf(setOf("period_prediction", "pms_relief"))
     }
     var notificationsEnabled by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
+        if (profile != null) {
+            if (profile.priorities.isNotEmpty()) selectedPriorities = profile.priorities.toSet()
+            notificationsEnabled = profile.notificationsEnabled
+        }
+    }
 
     Surface(
         modifier = Modifier
@@ -474,7 +487,19 @@ fun PersonalizationScreen(
 
             // Primary Button: Guardar y Comenzar →
             Button(
-                onClick = onNavigateToHome,
+                onClick = {
+                    if (isSaving) return@Button
+                    scope.launch {
+                        isSaving = true
+                        me.andresdavid.myapplication.data.FirebaseRepository.savePersonalization(
+                            priorities = selectedPriorities.toList(),
+                            notificationsEnabled = notificationsEnabled
+                        )
+                        isSaving = false
+                        onNavigateToHome()
+                    }
+                },
+                enabled = !isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -489,16 +514,18 @@ fun PersonalizationScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Guardar y Comenzar",
+                        text = if (isSaving) "Guardando..." else "Guardar y Comenzar",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    if (!isSaving) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 

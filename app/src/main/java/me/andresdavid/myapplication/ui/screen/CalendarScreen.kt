@@ -60,12 +60,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+
 @Composable
 fun CalendarScreen(
     onNavigateToTab: (Int) -> Unit = {},
     onNavigateToDailyLog: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(1) } // "Calendario" tab selected
+    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
+
+    LaunchedEffect(Unit) {
+        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
+        if (profile != null) {
+            userProfile = profile
+        }
+    }
 
     Scaffold(
         bottomBar = {

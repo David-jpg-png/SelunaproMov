@@ -3,6 +3,7 @@ package me.andresdavid.myapplication.data
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class DailyLogItem(
     val id: String = "",
@@ -19,7 +20,14 @@ data class UserProfile(
     val uid: String = "",
     val name: String = "",
     val email: String = "",
-    val goal: String = ""
+    val goal: String = "",
+    val approach: String = "TRACK_CYCLE",
+    val regularity: String = "REGULAR",
+    val contraceptive: String = "NONE",
+    val periodDays: Int = 5,
+    val conditions: List<String> = emptyList(),
+    val priorities: List<String> = emptyList(),
+    val notificationsEnabled: Boolean = true
 )
 
 object FirebaseRepository {
@@ -34,7 +42,9 @@ object FirebaseRepository {
             val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
             val uid = authResult.user?.uid ?: throw Exception("User UID is null")
             val userProfile = UserProfile(uid = uid, name = name, email = email, goal = goal)
-            db.collection("users").document(uid).set(userProfile).await()
+            withTimeoutOrNull(2000L) {
+                db.collection("users").document(uid).set(userProfile).await()
+            } ?: db.collection("users").document(uid).set(userProfile)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -50,11 +60,57 @@ object FirebaseRepository {
         }
     }
 
+    suspend fun saveNaturalRhythm(
+        approach: String,
+        regularity: String,
+        contraceptive: String,
+        periodDays: Int,
+        conditions: List<String>
+    ): Result<Unit> {
+        val uid = currentUserId ?: return Result.failure(Exception("Not logged in"))
+        return try {
+            val updates = mapOf(
+                "approach" to approach,
+                "regularity" to regularity,
+                "contraceptive" to contraceptive,
+                "periodDays" to periodDays,
+                "conditions" to conditions
+            )
+            withTimeoutOrNull(2000L) {
+                db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+            } ?: db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge())
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun savePersonalization(
+        priorities: List<String>,
+        notificationsEnabled: Boolean
+    ): Result<Unit> {
+        val uid = currentUserId ?: return Result.failure(Exception("Not logged in"))
+        return try {
+            val updates = mapOf(
+                "priorities" to priorities,
+                "notificationsEnabled" to notificationsEnabled
+            )
+            withTimeoutOrNull(2000L) {
+                db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+            } ?: db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge())
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getUserProfile(): UserProfile? {
         val uid = currentUserId ?: return null
         return try {
-            val snapshot = db.collection("users").document(uid).get().await()
-            snapshot.toObject(UserProfile::class.java)
+            val snapshot = withTimeoutOrNull(3000L) {
+                db.collection("users").document(uid).get().await()
+            }
+            snapshot?.toObject(UserProfile::class.java)
         } catch (e: Exception) {
             null
         }

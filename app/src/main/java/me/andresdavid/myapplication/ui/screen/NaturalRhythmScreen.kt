@@ -45,11 +45,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,6 +114,19 @@ fun NaturalRhythmScreen(
     var selectedContraceptive by remember { mutableStateOf(ContraceptiveType.NONE) }
     var periodDays by remember { mutableIntStateOf(5) }
     var selectedConditions by remember { mutableStateOf(setOf("Ninguna de las anteriores")) }
+    var isSaving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
+        if (profile != null) {
+            runCatching { selectedApproach = CycleApproach.valueOf(profile.approach) }
+            runCatching { selectedRegularity = CycleRegularity.valueOf(profile.regularity) }
+            runCatching { selectedContraceptive = ContraceptiveType.valueOf(profile.contraceptive) }
+            if (profile.periodDays > 0) periodDays = profile.periodDays
+            if (profile.conditions.isNotEmpty()) selectedConditions = profile.conditions.toSet()
+        }
+    }
 
     Surface(
         modifier = Modifier
@@ -1066,7 +1082,22 @@ fun NaturalRhythmScreen(
 
             // Primary Button: Continuar a Personalización →
             Button(
-                onClick = onNavigateToPersonalization,
+                onClick = {
+                    if (isSaving) return@Button
+                    scope.launch {
+                        isSaving = true
+                        me.andresdavid.myapplication.data.FirebaseRepository.saveNaturalRhythm(
+                            approach = selectedApproach.name,
+                            regularity = selectedRegularity.name,
+                            contraceptive = selectedContraceptive.name,
+                            periodDays = periodDays,
+                            conditions = selectedConditions.toList()
+                        )
+                        isSaving = false
+                        onNavigateToPersonalization()
+                    }
+                },
+                enabled = !isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -1081,16 +1112,18 @@ fun NaturalRhythmScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Continuar a Personalización",
+                        text = if (isSaving) "Guardando..." else "Continuar a Personalización",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    if (!isSaving) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
@@ -1104,7 +1137,18 @@ fun NaturalRhythmScreen(
                 color = Color(0xFF8C7F84),
                 modifier = Modifier
                     .padding(bottom = 16.dp)
-                    .clickable { onNavigateToHome() }
+                    .clickable {
+                        scope.launch {
+                            me.andresdavid.myapplication.data.FirebaseRepository.saveNaturalRhythm(
+                                approach = selectedApproach.name,
+                                regularity = selectedRegularity.name,
+                                contraceptive = selectedContraceptive.name,
+                                periodDays = periodDays,
+                                conditions = selectedConditions.toList()
+                            )
+                            onNavigateToHome()
+                        }
+                    }
             )
         }
     }

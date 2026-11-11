@@ -58,7 +58,9 @@ fun AppNavigation(
                     }
                 },
                 onNavigateToNaturalRhythm = {
-                    navController.navigate(Screen.NATURAL_RHYTHM)
+                    navController.navigate(Screen.NATURAL_RHYTHM) {
+                        popUpTo(Screen.REGISTER) { inclusive = true }
+                    }
                 }
             )
         }

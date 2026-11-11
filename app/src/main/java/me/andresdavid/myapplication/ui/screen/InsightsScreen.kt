@@ -73,11 +73,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+
 @Composable
 fun InsightsScreen(
     onNavigateToTab: (Int) -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(2) } // "Estadísticas" tab selected
+    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
+
+    LaunchedEffect(Unit) {
+        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
+        if (profile != null) {
+            userProfile = profile
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -379,7 +390,7 @@ fun InsightsScreen(
 
                             Row(verticalAlignment = Alignment.Bottom) {
                                 Text(
-                                    text = "5",
+                                    text = (userProfile?.periodDays ?: 5).toString(),
                                     fontSize = 32.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF33262A)
@@ -393,13 +404,14 @@ fun InsightsScreen(
                                 )
                             }
 
-                            // Green Pill Badge: Ciclo regular
+                            // Green Pill Badge: Ciclo regular / variable
                             Surface(
                                 shape = CircleShape,
                                 color = Color(0xFFE2F0EC)
                             ) {
+                                val regLabel = if (userProfile?.regularity == "VARIES") "• Ciclo variable" else "• Ciclo regular"
                                 Text(
-                                    text = "• Ciclo regular",
+                                    text = regLabel,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF2E594B),

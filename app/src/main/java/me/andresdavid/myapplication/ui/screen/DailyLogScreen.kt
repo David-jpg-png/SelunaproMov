@@ -72,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 
+import androidx.compose.runtime.LaunchedEffect
+
 enum class FlowLevel(val label: String) {
     NONE("Ninguno"),
     LIGHT("Ligero"),
@@ -91,7 +93,15 @@ fun DailyLogScreen(
     var selectedMoods by remember { mutableStateOf(setOf("Tranquila")) }
     var medicationTaken by remember { mutableStateOf(true) }
     var notes by remember { mutableStateOf("") }
+    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
+        if (profile != null) {
+            userProfile = profile
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -589,8 +599,13 @@ fun DailyLogScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF33262A)
                                     )
+                                    val medSubtext = if (!userProfile?.contraceptive.isNullOrBlank() && userProfile?.contraceptive != "NONE") {
+                                        "Recordatorio: ${userProfile?.contraceptive}"
+                                    } else {
+                                        "Anticonceptivo u otro fármaco"
+                                    }
                                     Text(
-                                        text = "Anticonceptivo u otro fármaco",
+                                        text = medSubtext,
                                         fontSize = 11.sp,
                                         color = Color(0xFF8C7F84)
                                     )

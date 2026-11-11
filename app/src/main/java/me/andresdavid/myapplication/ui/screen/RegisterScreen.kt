@@ -93,6 +93,7 @@ fun RegisterScreen(
     var selectedGoal by remember { mutableStateOf(UserGoal.CYCLE_TRACKING) }
     var termsAccepted by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Surface(
@@ -768,12 +769,20 @@ fun RegisterScreen(
             // Crear Cuenta Button
             Button(
                 onClick = {
+                    if (isLoading) return@Button
                     scope.launch {
                         if (name.isBlank() || email.isBlank() || password.isBlank()) {
                             errorMessage = "Completa todos los campos"
                             return@launch
                         }
+                        if (!termsAccepted) {
+                            errorMessage = "Debes aceptar los Términos de Servicio"
+                            return@launch
+                        }
+                        isLoading = true
+                        errorMessage = null
                         val res = me.andresdavid.myapplication.data.FirebaseRepository.signUp(email, password, name, selectedGoal.name)
+                        isLoading = false
                         if (res.isSuccess) {
                             onNavigateToNaturalRhythm()
                         } else {
@@ -781,6 +790,7 @@ fun RegisterScreen(
                         }
                     }
                 },
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -795,16 +805,18 @@ fun RegisterScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Crear Cuenta",
+                        text = if (isLoading) "Creando cuenta..." else "Crear Cuenta",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    if (!isLoading) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 

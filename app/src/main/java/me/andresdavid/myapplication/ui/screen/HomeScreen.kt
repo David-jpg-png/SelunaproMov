@@ -79,11 +79,15 @@ fun HomeScreen(
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(0) }
     var userName by remember { mutableStateOf("Isabella") }
+    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
 
     LaunchedEffect(Unit) {
         val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
-        if (profile != null && profile.name.isNotBlank()) {
-            userName = profile.name
+        if (profile != null) {
+            userProfile = profile
+            if (profile.name.isNotBlank()) {
+                userName = profile.name
+            }
         }
     }
 
@@ -441,8 +445,13 @@ fun HomeScreen(
                                             fontSize = 11.sp,
                                             color = Color(0xFF386657)
                                         )
+                                        val fertText = when (userProfile?.approach) {
+                                            "CONCEIVE" -> "Alta probab."
+                                            "PREVENT_PREGNANCY" -> "Protección"
+                                            else -> "Baja probab."
+                                        }
                                         Text(
-                                            text = "Baja probab.",
+                                            text = fertText,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF2E594B)
@@ -680,8 +689,13 @@ fun HomeScreen(
                                 letterSpacing = 0.5.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
+                            val tipText = when (userProfile?.approach) {
+                                "CONCEIVE" -> "Te encuentras en periodo de seguimiento fértil. Monitorea temperatura basal y cambios de flujo para identificar la ventana de ovulación."
+                                "PREVENT_PREGNANCY" -> "Seluna recalibra tus días de mayor atención. Mantén hábitos de protección activa y registra síntomas diarios."
+                                else -> "Tu energía empieza a aumentar gradualmente. Es un momento propicio para caminatas ligeras, yoga restaurativo e hidratación constante con infusiones cálidas."
+                            }
                             Text(
-                                text = "Tu energía empieza a aumentar gradualmente. Es un momento propicio para caminatas ligeras, yoga restaurativo e hidratación constante con infusiones cálidas.",
+                                text = tipText,
                                 fontSize = 12.sp,
                                 color = Color(0xFF2E594B),
                                 lineHeight = 17.sp
