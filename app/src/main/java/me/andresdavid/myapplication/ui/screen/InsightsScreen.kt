@@ -2,7 +2,6 @@ package me.andresdavid.myapplication.ui.screen
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,9 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AllInclusive
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -53,8 +49,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,24 +69,36 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.andresdavid.myapplication.data.DailyLogItem
+import me.andresdavid.myapplication.data.FirebaseRepository
+import me.andresdavid.myapplication.data.UserProfile
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
-
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 
 @Composable
 fun InsightsScreen(
     onNavigateToTab: (Int) -> Unit = {}
 ) {
-    var selectedBottomNav by remember { mutableIntStateOf(2) } // "Estadísticas" tab selected
-    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
+    var selectedBottomNav by remember { mutableIntStateOf(2) }
+    var userProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var dailyLogs by remember { mutableStateOf<List<DailyLogItem>>(emptyList()) }
 
     LaunchedEffect(Unit) {
-        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
-        if (profile != null) {
-            userProfile = profile
-        }
+        userProfile = FirebaseRepository.getUserProfile()
+        dailyLogs = FirebaseRepository.getDailyLogs()
     }
+
+    // Calculate real stats from dailyLogs
+    val totalLogsCount = dailyLogs.size
+    val flowLogsCount = dailyLogs.count { it.flowLevel.isNotBlank() && it.flowLevel != "Ninguno" }
+    val periodDaysDisplay = if (flowLogsCount > 0) flowLogsCount else (userProfile?.periodDays ?: 5)
+
+    // Compute symptom frequency
+    val allSymptoms = dailyLogs.flatMap { it.symptoms }
+    val symptomFrequencies = allSymptoms.groupingBy { it }.eachCount()
+    val topSymptoms = listOf("Fatiga", "Cólicos", "Dolor de cabeza", "Sensibilidad mamaria")
+        .map { name -> name to (symptomFrequencies[name] ?: 0) }
+
+    val maxSymptomCount = topSymptoms.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
 
     Scaffold(
         bottomBar = {
@@ -159,7 +169,7 @@ fun InsightsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .statusBarsPadding(),
-            color = Color(0xFFFDF8F9) // Warm blush background
+            color = Color(0xFFFDF8F9)
         ) {
             Column(
                 modifier = Modifier
@@ -223,7 +233,7 @@ fun InsightsScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Últimos 3 meses",
+                                text = "Total de $totalLogsCount registros",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF6E565E)
@@ -243,7 +253,7 @@ fun InsightsScreen(
                             color = Color(0xFF33262A)
                         )
                         Text(
-                            text = "Actualizado hoy",
+                            text = "Sincronizado",
                             fontSize = 12.sp,
                             color = Color(0xFF2E594B),
                             fontWeight = FontWeight.SemiBold
@@ -253,7 +263,7 @@ fun InsightsScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Tus ritmos biológicos reflejan un patrón armónico y predecible.",
+                        text = "Tus datos guardados permiten calcular tendencias biológicas precisas.",
                         fontSize = 13.sp,
                         color = Color(0xFF8C7F84),
                         lineHeight = 18.sp
@@ -267,7 +277,7 @@ fun InsightsScreen(
                         .padding(bottom = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Card 1: Promedio Ciclo (29 días)
+                    // Card 1: Registros Totales
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -287,7 +297,7 @@ fun InsightsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Promedio Ciclo",
+                                    text = "Días Registrados",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF6E565E)
@@ -302,7 +312,7 @@ fun InsightsScreen(
 
                             Row(verticalAlignment = Alignment.Bottom) {
                                 Text(
-                                    text = "29",
+                                    text = "$totalLogsCount",
                                     fontSize = 32.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF33262A)
@@ -317,7 +327,7 @@ fun InsightsScreen(
                             }
 
                             Text(
-                                text = "→ Variación ±1 día",
+                                text = "→ Historial guardado",
                                 fontSize = 11.sp,
                                 color = Color(0xFF8C7F84)
                             )
@@ -355,7 +365,7 @@ fun InsightsScreen(
                         }
                     }
 
-                    // Card 2: Menstruación (5 días)
+                    // Card 2: Duración de Menstruación
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -390,7 +400,7 @@ fun InsightsScreen(
 
                             Row(verticalAlignment = Alignment.Bottom) {
                                 Text(
-                                    text = (userProfile?.periodDays ?: 5).toString(),
+                                    text = "$periodDaysDisplay",
                                     fontSize = 32.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF33262A)
@@ -419,16 +429,15 @@ fun InsightsScreen(
                                 )
                             }
 
-                            // 5 Segmented Bar
+                            // Segmented Bar
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Box(modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape).background(Color(0xFF6B535E)))
-                                Box(modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape).background(Color(0xFF6B535E)))
-                                Box(modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape).background(Color(0xFFF7C2D2)))
-                                Box(modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape).background(Color(0xFFF7C2D2)))
-                                Box(modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape).background(Color(0xFFD3ECE1)))
+                                repeat(5) { idx ->
+                                    val bg = if (idx < periodDaysDisplay) Color(0xFF6B535E) else Color(0xFFD3ECE1)
+                                    Box(modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape).background(bg))
+                                }
                             }
                         }
                     }
@@ -461,7 +470,7 @@ fun InsightsScreen(
                                     color = Color(0xFF33262A)
                                 )
                                 Text(
-                                    text = "Frecuencia observada por ciclo",
+                                    text = "Frecuencia en tus registros",
                                     fontSize = 12.sp,
                                     color = Color(0xFF8C7F84)
                                 )
@@ -469,26 +478,15 @@ fun InsightsScreen(
 
                             Surface(
                                 shape = CircleShape,
-                                color = Color(0xFFFFF0F3),
-                                modifier = Modifier.clickable { /* Filter */ }
+                                color = Color(0xFFFFF0F3)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "3 meses",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF6E565E)
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        tint = Color(0xFF6E565E),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                Text(
+                                    text = "Real",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6E565E),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
                             }
                         }
 
@@ -508,7 +506,7 @@ fun InsightsScreen(
                                 verticalArrangement = Arrangement.SpaceBetween,
                                 horizontalAlignment = Alignment.End
                             ) {
-                                listOf("100%", "75%", "50%", "25%", "0%").forEach { pct ->
+                                listOf("Max", "Mid", "0").forEach { pct ->
                                     Text(
                                         text = pct,
                                         fontSize = 10.sp,
@@ -523,76 +521,48 @@ fun InsightsScreen(
                                     .weight(1f)
                                     .fillMaxHeight()
                             ) {
-                                // Dashed Grid lines
+                                // Grid lines
                                 Column(
                                     modifier = Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    repeat(5) {
+                                    repeat(3) {
                                         HorizontalDivider(color = Color(0xFFF2ECEE))
                                     }
                                 }
 
-                                // 4 Vertical Bars Row
+                                // Dynamic Bars Row
                                 Row(
                                     modifier = Modifier.fillMaxSize(),
                                     horizontalArrangement = Arrangement.SpaceAround,
                                     verticalAlignment = Alignment.Bottom
                                 ) {
-                                    // Bar 1: Fatiga (80%)
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(28.dp)
-                                                .height(115.dp)
-                                                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                                                .background(Color(0xFFF7C2D2))
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Icon(Icons.Outlined.Nightlight, contentDescription = null, tint = Color(0xFF33262A), modifier = Modifier.size(14.dp))
-                                        Text("Fatiga", fontSize = 10.sp, color = Color(0xFF8C7F84))
-                                    }
+                                    topSymptoms.forEach { (symptomName, count) ->
+                                        val heightPercent = if (maxSymptomCount > 0) (count.toFloat() / maxSymptomCount.toFloat()).coerceIn(0.1f, 1.0f) else 0.1f
+                                        val barHeight = (120 * heightPercent).dp
 
-                                    // Bar 2: Cólicos (62%)
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(28.dp)
-                                                .height(90.dp)
-                                                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                                                .background(Color(0xFFF7C2D2))
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Icon(Icons.Outlined.Spa, contentDescription = null, tint = Color(0xFF33262A), modifier = Modifier.size(14.dp))
-                                        Text("Cólicos", fontSize = 10.sp, color = Color(0xFF8C7F84))
-                                    }
-
-                                    // Bar 3: Cefalea (38%)
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(28.dp)
-                                                .height(55.dp)
-                                                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                                                .background(Color(0xFFE2F0EC))
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Icon(Icons.Outlined.HelpOutline, contentDescription = null, tint = Color(0xFF33262A), modifier = Modifier.size(14.dp))
-                                        Text("Cefalea", fontSize = 10.sp, color = Color(0xFF8C7F84))
-                                    }
-
-                                    // Bar 4: Ánimo (46%)
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(28.dp)
-                                                .height(65.dp)
-                                                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                                                .background(Color(0xFFD3ECE1))
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Icon(Icons.Outlined.SentimentDissatisfied, contentDescription = null, tint = Color(0xFF33262A), modifier = Modifier.size(14.dp))
-                                        Text("Ánimo", fontSize = 10.sp, color = Color(0xFF8C7F84))
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "$count",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF805C6B)
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(28.dp)
+                                                    .height(barHeight)
+                                                    .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                                                    .background(if (count > 0) Color(0xFFF7C2D2) else Color(0xFFE2F0EC))
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = symptomName,
+                                                fontSize = 10.sp,
+                                                color = Color(0xFF8C7F84)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -600,14 +570,18 @@ fun InsightsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Bottom Info Pill Box
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = Color(0xFFFFF0F3),
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            val footerMsg = if (dailyLogs.isEmpty()) {
+                                "Registra tus primeros días para calcular el mapa de síntomas."
+                            } else {
+                                "Basado en $totalLogsCount días registrados guardados."
+                            }
                             Text(
-                                text = "Toca una barra para inspeccionar la frecuencia en cada fase.",
+                                text = footerMsg,
                                 fontSize = 11.sp,
                                 color = Color(0xFF6E565E),
                                 textAlign = TextAlign.Center,
@@ -617,7 +591,7 @@ fun InsightsScreen(
                     }
                 }
 
-                // Medical Analysis Card: Fase lútea estable (14 días)
+                // Medical Analysis Card
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -644,13 +618,13 @@ fun InsightsScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "Fase lútea estable (14 días)",
+                                    text = "Análisis médico de bienestar",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF2E594B)
                                 )
                                 Text(
-                                    text = "Análisis médico de bienestar",
+                                    text = "Perfil: ${userProfile?.name?.ifBlank { "Usuario" } ?: "Usuario"}",
                                     fontSize = 11.sp,
                                     color = Color(0xFF386657)
                                 )
@@ -659,8 +633,14 @@ fun InsightsScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        val analysisText = if (dailyLogs.isNotEmpty()) {
+                            "Con $totalLogsCount registros guardados, Seluna calibra tus patrones biológicos. Tus síntomas guardados reflejan un seguimiento activo para tus consultas médicas."
+                        } else {
+                            "Aún no cuentas con registros guardados. Agrega tus síntomas diarios en la pestaña 'Registro' para iniciar el análisis biológico."
+                        }
+
                         Text(
-                            text = "Tus patrones muestran alta consistencia este trimestre. Una fase lútea de 14 días indica ovulaciones regulares y niveles hormonales óptimos para tu recuperación física.",
+                            text = analysisText,
                             fontSize = 12.sp,
                             color = Color(0xFF2E594B),
                             lineHeight = 17.sp
@@ -689,8 +669,8 @@ fun InsightsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column {
-                                        Text("Ovulación", fontSize = 10.sp, color = Color(0xFF386657))
-                                        Text("Día 15 detectado", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E594B))
+                                        Text("Seguimiento", fontSize = 10.sp, color = Color(0xFF386657))
+                                        Text("$totalLogsCount días", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E594B))
                                     }
                                 }
                             }
@@ -712,81 +692,10 @@ fun InsightsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column {
-                                        Text("Confianza", fontSize = 10.sp, color = Color(0xFF386657))
-                                        Text("98% concordancia", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E594B))
+                                        Text("Sincronización", fontSize = 10.sp, color = Color(0xFF386657))
+                                        Text("100% activa", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E594B))
                                     }
                                 }
-                            }
-                        }
-                    }
-                }
-
-                // Nutritional Guide Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                        .clickable { /* View guide */ },
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EEFA))
-                ) {
-                    Column {
-                        // Top Illustration / Aesthetic Card Header
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp)
-                                .background(Color(0xFFEADBDF)),
-                            contentAlignment = Alignment.BottomStart
-                        ) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                drawRect(color = Color(0xFFE8C2A0), size = androidx.compose.ui.geometry.Size(size.width * 0.4f, size.height))
-                                drawCircle(color = Color(0xFFFFF0F3), radius = 60f, center = Offset(size.width * 0.7f, size.height * 0.5f))
-                            }
-                            Text(
-                                text = "Guía Nutricional Personalizada",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(12.dp)
-                            )
-                        }
-
-                        // Bottom Text Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Infusiones antiinflamatorias",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF33262A)
-                                )
-                                Text(
-                                    text = "Recomendadas durante tu fase lútea",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF8C7F84)
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = Color(0xFF33262A),
-                                    modifier = Modifier.size(18.dp)
-                                )
                             }
                         }
                     }

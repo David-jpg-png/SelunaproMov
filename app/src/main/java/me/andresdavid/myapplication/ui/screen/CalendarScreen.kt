@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,18 +23,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.EditCalendar
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -43,8 +41,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,25 +58,37 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.andresdavid.myapplication.data.DailyLogItem
+import me.andresdavid.myapplication.data.FirebaseRepository
+import me.andresdavid.myapplication.data.UserProfile
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
-
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun CalendarScreen(
     onNavigateToTab: (Int) -> Unit = {},
     onNavigateToDailyLog: () -> Unit = {}
 ) {
-    var selectedBottomNav by remember { mutableIntStateOf(1) } // "Calendario" tab selected
-    var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
+    var selectedBottomNav by remember { mutableIntStateOf(1) }
+    var userProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var dailyLogs by remember { mutableStateOf<List<DailyLogItem>>(emptyList()) }
+    var selectedDayNumber by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
+
+    val currentCal = Calendar.getInstance()
+    val monthFormat = SimpleDateFormat("MMMM yyyy", Locale("es", "ES"))
+    val currentMonthTitle = monthFormat.format(currentCal.time).replaceFirstChar { it.uppercase() }
 
     LaunchedEffect(Unit) {
-        val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
-        if (profile != null) {
-            userProfile = profile
-        }
+        userProfile = FirebaseRepository.getUserProfile()
+        dailyLogs = FirebaseRepository.getDailyLogs()
     }
+
+    // Find log for the selected day in current month
+    val currentYearMonthPrefix = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(currentCal.time)
+    val selectedDateStr = String.format(Locale.getDefault(), "%s-%02d", currentYearMonthPrefix, selectedDayNumber)
+    val selectedDayLog = dailyLogs.find { it.date == selectedDateStr }
 
     Scaffold(
         bottomBar = {
@@ -147,7 +159,7 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .statusBarsPadding(),
-            color = Color(0xFFFDF8F9) // Warm blush background
+            color = Color(0xFFFDF8F9)
         ) {
             Column(
                 modifier = Modifier
@@ -196,13 +208,11 @@ fun CalendarScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Prev Month Button
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFFF0F3))
-                            .clickable { /* Prev month */ },
+                            .background(Color(0xFFFFF0F3)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -213,10 +223,9 @@ fun CalendarScreen(
                         )
                     }
 
-                    // Month & Subtitle Text
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Noviembre 2024",
+                            text = currentMonthTitle,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF33262A)
@@ -230,21 +239,20 @@ fun CalendarScreen(
                                     .background(Color(0xFFE594AD))
                             )
                             Spacer(modifier = Modifier.width(4.dp))
+                            val totalLogs = dailyLogs.size
                             Text(
-                                text = "Ciclo actual: Día 18",
+                                text = "Registros guardados: $totalLogs",
                                 fontSize = 12.sp,
                                 color = Color(0xFF8C7F84)
                             )
                         }
                     }
 
-                    // Next Month Button
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFFF0F3))
-                            .clickable { /* Next month */ },
+                            .background(Color(0xFFFFF0F3)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -289,39 +297,37 @@ fun CalendarScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Calendar Rows
-                        val calendarRows = listOf(
-                            listOf(
-                                CalendarCell(28, false), CalendarCell(29, false), CalendarCell(30, false), CalendarCell(31, false),
-                                CalendarCell(1, true, CellType.MENSTRUATION, startRange = true),
-                                CalendarCell(2, true, CellType.MENSTRUATION),
-                                CalendarCell(3, true, CellType.MENSTRUATION, endRangeRow = true)
-                            ),
-                            listOf(
-                                CalendarCell(4, true, CellType.MENSTRUATION, startRangeRow = true),
-                                CalendarCell(5, true, CellType.MENSTRUATION, endRange = true),
-                                CalendarCell(6, true), CalendarCell(7, true), CalendarCell(8, true), CalendarCell(9, true), CalendarCell(10, true)
-                            ),
-                            listOf(
-                                CalendarCell(11, true), CalendarCell(12, true), CalendarCell(13, true),
-                                CalendarCell(14, true, CellType.FERTILE),
-                                CalendarCell(15, true, CellType.FERTILE),
-                                CalendarCell(16, true, CellType.OVULATION),
-                                CalendarCell(17, true, CellType.FERTILE)
-                            ),
-                            listOf(
-                                CalendarCell(18, true, CellType.TODAY),
-                                CalendarCell(19, true), CalendarCell(20, true), CalendarCell(21, true), CalendarCell(22, true), CalendarCell(23, true), CalendarCell(24, true)
-                            ),
-                            listOf(
-                                CalendarCell(25, true), CalendarCell(26, true), CalendarCell(27, true), CalendarCell(28, true),
-                                CalendarCell(29, true, CellType.PREDICTION),
-                                CalendarCell(30, true, CellType.PREDICTION),
-                                CalendarCell(1, false)
-                            )
-                        )
+                        // Dynamic Month Grid (30/31 days)
+                        val daysInMonth = currentCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                        val todayNum = currentCal.get(Calendar.DAY_OF_MONTH)
+                        val periodDays = userProfile?.periodDays ?: 5
 
-                        calendarRows.forEach { row ->
+                        // Group days into weeks of 7
+                        val cells = (1..daysInMonth).map { dayNum ->
+                            val dateStr = String.format(Locale.getDefault(), "%s-%02d", currentYearMonthPrefix, dayNum)
+                            val log = dailyLogs.find { it.date == dateStr }
+                            val hasFlow = log != null && log.flowLevel.isNotBlank() && log.flowLevel != "Ninguno"
+                            val hasData = log != null && (log.symptoms.isNotEmpty() || log.moods.isNotEmpty() || log.notes.isNotBlank() || log.medicationTaken)
+
+                            val type = when {
+                                hasFlow -> CellType.MENSTRUATION
+                                dayNum <= periodDays && dailyLogs.isEmpty() -> CellType.MENSTRUATION
+                                dayNum == todayNum -> CellType.TODAY
+                                dayNum == 14 -> CellType.OVULATION
+                                dayNum in 12..16 -> CellType.FERTILE
+                                else -> CellType.REGULAR
+                            }
+                            CalendarCell(
+                                dayNumber = dayNum,
+                                isCurrentMonth = true,
+                                type = type,
+                                hasData = hasData,
+                                isSelected = dayNum == selectedDayNumber
+                            )
+                        }
+
+                        val rows = cells.chunked(7)
+                        rows.forEach { row ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -330,9 +336,107 @@ fun CalendarScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 row.forEach { cell ->
-                                    CalendarDayView(cell = cell)
+                                    CalendarDayView(
+                                        cell = cell,
+                                        onClick = { selectedDayNumber = cell.dayNumber }
+                                    )
+                                }
+                                // Fill remaining slots in last row if needed
+                                if (row.size < 7) {
+                                    repeat(7 - row.size) {
+                                        Spacer(modifier = Modifier.width(36.dp))
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+
+                // Selected Day Details Card (Persisted Log Details)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F3))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "DETALLE DEL DÍA $selectedDayNumber",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF8C7F84),
+                                letterSpacing = 0.5.sp
+                            )
+                            if (selectedDayLog != null) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFE2F0EC)
+                                ) {
+                                    Text(
+                                        text = "✓ Registrado",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E594B),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (selectedDayLog != null) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (selectedDayLog.flowLevel.isNotBlank()) {
+                                    Text(
+                                        text = "🩸 Flujo: ${selectedDayLog.flowLevel}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF33262A)
+                                    )
+                                }
+                                if (selectedDayLog.symptoms.isNotEmpty()) {
+                                    Text(
+                                        text = "🌷 Síntomas: ${selectedDayLog.symptoms.joinToString(", ")}",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF33262A)
+                                    )
+                                }
+                                if (selectedDayLog.moods.isNotEmpty()) {
+                                    Text(
+                                        text = "😌 Ánimo: ${selectedDayLog.moods.joinToString(", ")}",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF33262A)
+                                    )
+                                }
+                                if (selectedDayLog.medicationTaken) {
+                                    Text(
+                                        text = "💊 Medicación: Tomada",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF2E594B),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (selectedDayLog.notes.isNotBlank()) {
+                                    Text(
+                                        text = "📝 Notas: ${selectedDayLog.notes}",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF6E6065)
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "No hay registros guardados para este día.",
+                                fontSize = 13.sp,
+                                color = Color(0xFF8C7F84)
+                            )
                         }
                     }
                 }
@@ -343,7 +447,7 @@ fun CalendarScreen(
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
                     shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F3))
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -358,11 +462,10 @@ fun CalendarScreen(
                         // 2x2 Grid of Legend Pills
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // Menstruación
                                 Surface(
                                     modifier = Modifier.weight(1f),
                                     shape = CircleShape,
-                                    color = Color.White
+                                    color = Color(0xFFFFF0F3)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -376,7 +479,7 @@ fun CalendarScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Menstruación",
+                                            text = "Menstruación / Flujo",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color(0xFF33262A)
@@ -384,11 +487,10 @@ fun CalendarScreen(
                                     }
                                 }
 
-                                // Días Fértiles
                                 Surface(
                                     modifier = Modifier.weight(1f),
                                     shape = CircleShape,
-                                    color = Color.White
+                                    color = Color(0xFFFFF0F3)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -412,11 +514,10 @@ fun CalendarScreen(
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // Ovulación
                                 Surface(
                                     modifier = Modifier.weight(1f),
                                     shape = CircleShape,
-                                    color = Color.White
+                                    color = Color(0xFFFFF0F3)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -439,11 +540,10 @@ fun CalendarScreen(
                                     }
                                 }
 
-                                // Predicción
                                 Surface(
                                     modifier = Modifier.weight(1f),
                                     shape = CircleShape,
-                                    color = Color.White
+                                    color = Color(0xFFFFF0F3)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -453,11 +553,11 @@ fun CalendarScreen(
                                             modifier = Modifier
                                                 .size(14.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFFE2F0EC))
+                                                .background(Color(0xFF33262A))
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Predicción",
+                                            text = "Hoy",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color(0xFF33262A)
@@ -466,69 +566,6 @@ fun CalendarScreen(
                                 }
                             }
                         }
-                    }
-                }
-
-                // Diciembre 2024 Accordion Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                        .clickable { /* Expand december */ },
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF0E6E8))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFFF0F3)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.CalendarMonth,
-                                    contentDescription = null,
-                                    tint = Color(0xFF805C6B),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column {
-                                Text(
-                                    text = "Diciembre 2024",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF33262A)
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Continuidad prevista • Periodo probable 27–31 dic",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF8C7F84)
-                                )
-                            }
-                        }
-
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Desplegar",
-                            tint = Color(0xFF33262A),
-                            modifier = Modifier.size(24.dp)
-                        )
                     }
                 }
 
@@ -554,7 +591,7 @@ fun CalendarScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Editar periodo o registrar nuevo ciclo",
+                            text = "Registrar síntomas para hoy",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF33262A)
@@ -565,7 +602,7 @@ fun CalendarScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Tus datos están protegidos y calibran la precisión de Seluna",
+                    text = "Tus registros se guardan y sincronizan automáticamente.",
                     fontSize = 11.sp,
                     color = Color(0xFF9E8F95),
                     textAlign = TextAlign.Center,
@@ -589,17 +626,19 @@ data class CalendarCell(
     val dayNumber: Int,
     val isCurrentMonth: Boolean,
     val type: CellType = CellType.REGULAR,
-    val startRange: Boolean = false,
-    val endRange: Boolean = false,
-    val startRangeRow: Boolean = false,
-    val endRangeRow: Boolean = false
+    val hasData: Boolean = false,
+    val isSelected: Boolean = false
 )
 
 @Composable
-fun CalendarDayView(cell: CalendarCell) {
+fun CalendarDayView(
+    cell: CalendarCell,
+    onClick: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
-            .size(36.dp),
+            .size(36.dp)
+            .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         if (!cell.isCurrentMonth) {
@@ -610,112 +649,41 @@ fun CalendarDayView(cell: CalendarCell) {
                 textAlign = TextAlign.Center
             )
         } else {
-            when (cell.type) {
-                CellType.MENSTRUATION -> {
-                    // Continuous pill highlight for menstruation
-                    val shape = when {
-                        cell.startRange -> RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
-                        cell.endRange -> RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
-                        cell.startRangeRow -> RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
-                        cell.endRangeRow -> RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
-                        else -> RoundedCornerShape(0.dp)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFFF7C2D2), shape = shape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = cell.dayNumber.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF33262A)
-                        )
-                    }
-                }
-                CellType.FERTILE -> {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFD3ECE1)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = cell.dayNumber.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF33262A)
-                        )
-                    }
-                }
-                CellType.OVULATION -> {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE2EDF8))
-                            .border(1.5.dp, Color(0xFF4A3E45), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = cell.dayNumber.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF33262A)
-                        )
+            val bgShape = CircleShape
+            val bgColor = when {
+                cell.type == CellType.MENSTRUATION -> Color(0xFFF7C2D2)
+                cell.type == CellType.FERTILE -> Color(0xFFD3ECE1)
+                cell.type == CellType.OVULATION -> Color(0xFFE2EDF8)
+                else -> Color.Transparent
+            }
 
-                        // Small dot on top right
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawCircle(
-                                color = Color(0xFF4A3E45),
-                                radius = 2.dp.toPx(),
-                                center = Offset(size.width * 0.8f, size.height * 0.2f)
-                            )
-                        }
-                    }
-                }
-                CellType.TODAY -> {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .border(2.dp, Color(0xFF33262A), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = cell.dayNumber.toString(),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF33262A)
-                        )
-                    }
-                }
-                CellType.PREDICTION -> {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE2F0EC)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = cell.dayNumber.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF33262A)
-                        )
-                    }
-                }
-                CellType.REGULAR -> {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(bgShape)
+                    .background(bgColor)
+                    .border(
+                        width = if (cell.isSelected) 2.dp else if (cell.type == CellType.TODAY) 1.5.dp else 0.dp,
+                        color = if (cell.isSelected) Color(0xFF805C6B) else if (cell.type == CellType.TODAY) Color(0xFF33262A) else Color.Transparent,
+                        shape = bgShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = cell.dayNumber.toString(),
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF33262A),
-                        textAlign = TextAlign.Center
+                        fontWeight = if (cell.type == CellType.TODAY || cell.isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = Color(0xFF33262A)
                     )
+                    if (cell.hasData) {
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF33262A))
+                        )
+                    }
                 }
             }
         }

@@ -88,10 +88,10 @@ fun DailyLogScreen(
     onSaveLog: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(3) } // "Registro" tab selected
-    var flowLevel by remember { mutableStateOf(FlowLevel.LIGHT) }
-    var selectedSymptoms by remember { mutableStateOf(setOf("Cólicos", "Dolor de cabeza", "Fatiga")) }
-    var selectedMoods by remember { mutableStateOf(setOf("Tranquila")) }
-    var medicationTaken by remember { mutableStateOf(true) }
+    var flowLevel by remember { mutableStateOf(FlowLevel.NONE) }
+    var selectedSymptoms by remember { mutableStateOf(emptySet<String>()) }
+    var selectedMoods by remember { mutableStateOf(emptySet<String>()) }
+    var medicationTaken by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
     val scope = rememberCoroutineScope()
@@ -100,6 +100,17 @@ fun DailyLogScreen(
         val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
         if (profile != null) {
             userProfile = profile
+        }
+        val logs = me.andresdavid.myapplication.data.FirebaseRepository.getDailyLogs()
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val todayStr = dateFormat.format(java.util.Date())
+        val existingLog = logs.find { it.date == todayStr }
+        if (existingLog != null) {
+            flowLevel = FlowLevel.entries.find { it.label == existingLog.flowLevel } ?: FlowLevel.NONE
+            selectedSymptoms = existingLog.symptoms.toSet()
+            selectedMoods = existingLog.moods.toSet()
+            medicationTaken = existingLog.medicationTaken
+            notes = existingLog.notes
         }
     }
 
