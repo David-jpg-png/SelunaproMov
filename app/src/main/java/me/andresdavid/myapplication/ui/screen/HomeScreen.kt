@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -33,12 +34,16 @@ import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +73,7 @@ import me.andresdavid.myapplication.data.DailyLogItem
 import me.andresdavid.myapplication.data.FirebaseRepository
 import me.andresdavid.myapplication.data.UserProfile
 import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -77,18 +84,39 @@ import kotlin.math.sin
 @Composable
 fun HomeScreen(
     onNavigateToTab: (Int) -> Unit = {},
-    onNavigateToDailyLog: () -> Unit = {}
+    onNavigateToDailyLog: () -> Unit = {},
+    onSignOut: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(0) }
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var todayLog by remember { mutableStateOf<DailyLogItem?>(null) }
+    var showSignOutDialog by remember { mutableStateOf(false) }
+    var aiTipText by remember { mutableStateOf<String?>(null) }
+    var isAiLoading by remember { mutableStateOf(true) }
+    var userQuestion by remember { mutableStateOf("") }
+    var isAskingGemini by remember { mutableStateOf(false) }
+    var geminiAnswer by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
+        isAiLoading = true
         val profile = FirebaseRepository.getUserProfile()
         userProfile = profile
         val logs = FirebaseRepository.getDailyLogs()
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         todayLog = logs.find { it.date == todayStr } ?: logs.maxByOrNull { it.timestamp }
+
+        val nameStr = if (!profile?.name.isNullOrBlank()) profile!!.name else FirebaseRepository.currentUserName
+        val conds = profile?.conditions?.filter { it != "Ninguna de las anteriores" && it.isNotBlank() } ?: emptyList()
+        val generatedTip = me.andresdavid.myapplication.data.GeminiService.generateCycleAdvice(
+            userName = nameStr,
+            phase = profile?.approach ?: "TRACK_CYCLE",
+            symptoms = todayLog?.symptoms ?: emptyList(),
+            moods = todayLog?.moods ?: emptyList(),
+            conditions = conds
+        )
+        aiTipText = generatedTip
+        isAiLoading = false
     }
 
     // Dynamic date string
@@ -122,7 +150,7 @@ fun HomeScreen(
     val formattedDate = "$dayOfWeekStr, $dayOfMonth DE $monthStr"
 
     // Profile formatted labels
-    val userName = userProfile?.name?.ifBlank { "Usuario" } ?: "Usuario"
+    val userName = if (!userProfile?.name.isNullOrBlank()) userProfile!!.name else FirebaseRepository.currentUserName
 
     val approachLabel = when (userProfile?.approach) {
         "CONCEIVE" -> "Buscando concebir"
@@ -247,12 +275,13 @@ fun HomeScreen(
                         color = Color(0xFF33262A)
                     )
 
-                    // Avatar Circle
+                    // Avatar Circle (Clickable for Sign Out)
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE8C2A0)),
+                            .background(Color(0xFFE8C2A0))
+                            .clickable { showSignOutDialog = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Canvas(modifier = Modifier.size(24.dp)) {
@@ -260,6 +289,47 @@ fun HomeScreen(
                             drawCircle(color = Color(0xFF6B535E), radius = 14f, center = Offset(size.width * 0.5f, size.height * 0.9f))
                         }
                     }
+                }
+
+                // Sign Out Dialog
+                if (showSignOutDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showSignOutDialog = false },
+                        title = {
+                            Text(
+                                text = "Cerrar sesión",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = Color(0xFF33262A)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = "¿Estás segura de que deseas cerrar sesión en Seluna?",
+                                fontSize = 14.sp,
+                                color = Color(0xFF6E6065)
+                            )
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.Button(
+                                onClick = {
+                                    showSignOutDialog = false
+                                    FirebaseRepository.signOut()
+                                    onSignOut()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF805C6B))
+                            ) {
+                                Text("Cerrar Sesión", color = Color.White, fontSize = 13.sp)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showSignOutDialog = false }) {
+                                Text("Cancelar", color = Color(0xFF8C7F84), fontSize = 13.sp)
+                            }
+                        },
+                        containerColor = Color.White,
+                        shape = RoundedCornerShape(24.dp)
+                    )
                 }
 
                 // Greeting & Notification Header Row
@@ -794,7 +864,7 @@ fun HomeScreen(
                     }
                 }
 
-                // "CONSEJO DE SELUNA" Banner Card (Dynamic per User Profile & Conditions)
+                // GEMINI AI Card in HomeScreen
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -802,38 +872,85 @@ fun HomeScreen(
                     shape = RoundedCornerShape(22.dp),
                     color = Color(0xFFE2F0EC)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.Top
+                    Column(
+                        modifier = Modifier.padding(16.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.White),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color(0xFF2E594B),
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2E594B),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "GEMINI AI • CONSEJO DE SELUNA",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E594B),
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF2E594B)
+                                    ) {
+                                        Text(
+                                            text = "Gemini 1.5",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "Asistente de bienestar para $userName",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF386657)
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        Column {
-                            Text(
-                                text = "CONSEJO DE SELUNA • $userName",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2E594B),
-                                letterSpacing = 0.5.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            val tipText = when {
+                        if (isAiLoading) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color(0xFF2E594B),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Gemini AI está analizando tu ciclo...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF2E594B)
+                                )
+                            }
+                        } else {
+                            val defaultTipText = when {
                                 userConditions.isNotEmpty() ->
                                     "Para tus condiciones de ${userConditions.joinToString()}: Prioriza hidratación constante, descanso restaurativo y actividades suaves."
                                 userProfile?.approach == "CONCEIVE" ->
@@ -845,11 +962,107 @@ fun HomeScreen(
                             }
 
                             Text(
-                                text = tipText,
+                                text = aiTipText ?: defaultTipText,
                                 fontSize = 12.sp,
                                 color = Color(0xFF2E594B),
                                 lineHeight = 17.sp
                             )
+                        }
+
+                        // Response to custom user query
+                        geminiAnswer?.let { answer ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text(
+                                        text = "Respuesta de Gemini AI:",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E594B)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = answer,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF33262A),
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Interactive query input for Gemini
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = userQuestion,
+                                onValueChange = { userQuestion = it },
+                                placeholder = {
+                                    Text(
+                                        "Pregúntale algo a Gemini AI...",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF6E8079)
+                                    )
+                                },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    disabledContainerColor = Color.White,
+                                    focusedBorderColor = Color(0xFF2E594B),
+                                    unfocusedBorderColor = Color.Transparent
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Surface(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .clickable(enabled = userQuestion.isNotBlank() && !isAskingGemini) {
+                                        val query = userQuestion.trim()
+                                        if (query.isNotBlank()) {
+                                            isAskingGemini = true
+                                            coroutineScope.launch {
+                                                val resp = me.andresdavid.myapplication.data.GeminiService.askGemini(query)
+                                                geminiAnswer = resp
+                                                isAskingGemini = false
+                                                userQuestion = ""
+                                            }
+                                        }
+                                    },
+                                color = if (userQuestion.isNotBlank() && !isAskingGemini) Color(0xFF2E594B) else Color(0xFFB2C8C0)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (isAskingGemini) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = "Enviar a Gemini",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

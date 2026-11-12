@@ -69,12 +69,15 @@ import java.util.Locale
 @Composable
 fun CalendarScreen(
     onNavigateToTab: (Int) -> Unit = {},
-    onNavigateToDailyLog: () -> Unit = {}
+    onNavigateToDailyLog: () -> Unit = {},
+    onSignOut: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(1) }
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var dailyLogs by remember { mutableStateOf<List<DailyLogItem>>(emptyList()) }
     var selectedDayNumber by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+    var showSignOutDialog by remember { mutableStateOf(false) }
 
     val currentCal = Calendar.getInstance()
     val monthFormat = SimpleDateFormat("MMMM yyyy", Locale("es", "ES"))
@@ -185,12 +188,13 @@ fun CalendarScreen(
                         color = Color(0xFF33262A)
                     )
 
-                    // Profile Avatar Circle
+                    // Profile Avatar Circle (Clickable for Sign Out)
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE8C2A0)),
+                            .background(Color(0xFFE8C2A0))
+                            .clickable { showSignOutDialog = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Canvas(modifier = Modifier.size(24.dp)) {
@@ -198,6 +202,47 @@ fun CalendarScreen(
                             drawCircle(color = Color(0xFF6B535E), radius = 14f, center = Offset(size.width * 0.5f, size.height * 0.9f))
                         }
                     }
+                }
+
+                // Sign Out Dialog
+                if (showSignOutDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showSignOutDialog = false },
+                        title = {
+                            Text(
+                                text = "Cerrar sesión",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = Color(0xFF33262A)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = "¿Estás segura de que deseas cerrar sesión en Seluna?",
+                                fontSize = 14.sp,
+                                color = Color(0xFF6E6065)
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showSignOutDialog = false
+                                    FirebaseRepository.signOut()
+                                    onSignOut()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF805C6B))
+                            ) {
+                                Text("Cerrar Sesión", color = Color.White, fontSize = 13.sp)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showSignOutDialog = false }) {
+                                Text("Cancelar", color = Color(0xFF8C7F84), fontSize = 13.sp)
+                            }
+                        },
+                        containerColor = Color.White,
+                        shape = RoundedCornerShape(24.dp)
+                    )
                 }
 
                 // Month Selector Header Row
@@ -352,11 +397,69 @@ fun CalendarScreen(
                     }
                 }
 
+                // Modal Dialog for Full Detail View
+                if (showDetailDialog && selectedDayLog != null) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showDetailDialog = false },
+                        title = {
+                            Text(
+                                text = "Registro del día $selectedDayNumber",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = Color(0xFF33262A)
+                            )
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("📅 Fecha: ${selectedDayLog.date}", fontSize = 13.sp, color = Color(0xFF6E6065))
+                                if (selectedDayLog.flowLevel.isNotBlank()) {
+                                    Text("🩸 Flujo: ${selectedDayLog.flowLevel}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF33262A))
+                                }
+                                if (selectedDayLog.symptoms.isNotEmpty()) {
+                                    Text("🌷 Síntomas: ${selectedDayLog.symptoms.joinToString(", ")}", fontSize = 13.sp, color = Color(0xFF33262A))
+                                }
+                                if (selectedDayLog.moods.isNotEmpty()) {
+                                    Text("😌 Ánimo: ${selectedDayLog.moods.joinToString(", ")}", fontSize = 13.sp, color = Color(0xFF33262A))
+                                }
+                                Text("💊 Medicación tomada: ${if (selectedDayLog.medicationTaken) "Sí" else "No"}", fontSize = 13.sp, color = Color(0xFF33262A))
+                                if (selectedDayLog.notes.isNotBlank()) {
+                                    Text("📝 Notas: ${selectedDayLog.notes}", fontSize = 13.sp, color = Color(0xFF6E6065))
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showDetailDialog = false
+                                    onNavigateToDailyLog()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF33262A))
+                            ) {
+                                Text("Editar en Registro", fontSize = 13.sp)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showDetailDialog = false }) {
+                                Text("Cerrar", color = Color(0xFF8C7F84), fontSize = 13.sp)
+                            }
+                        },
+                        containerColor = Color.White,
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                }
+
                 // Selected Day Details Card (Persisted Log Details)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 16.dp),
+                        .padding(bottom = 16.dp)
+                        .clickable {
+                            if (selectedDayLog != null) {
+                                showDetailDialog = true
+                            } else {
+                                onNavigateToDailyLog()
+                            }
+                        },
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F3))
                 ) {
@@ -430,13 +533,59 @@ fun CalendarScreen(
                                         color = Color(0xFF6E6065)
                                     )
                                 }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(38.dp)
+                                        .clickable { showDetailDialog = true },
+                                    shape = CircleShape,
+                                    color = Color.White
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Text(
+                                            text = "🔍 Ver información completa o editar",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF33262A)
+                                        )
+                                    }
+                                }
                             }
                         } else {
-                            Text(
-                                text = "No hay registros guardados para este día.",
-                                fontSize = 13.sp,
-                                color = Color(0xFF8C7F84)
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "No hay registros guardados para este día.",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF8C7F84)
+                                )
+
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(38.dp)
+                                        .clickable { onNavigateToDailyLog() },
+                                    shape = CircleShape,
+                                    color = Color.White
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Text(
+                                            text = "+ Registrar síntomas para este día",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF33262A)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

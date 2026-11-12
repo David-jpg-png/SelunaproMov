@@ -61,5 +61,11 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    // Firebase Vertex AI (Gemini)
+    implementation("com.google.firebase:firebase-vertexai")
+    // App Check para desarrollo
+    implementation("com.google.firebase:firebase-appcheck-debug")
+    // Corrutinas
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
 }

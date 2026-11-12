@@ -76,11 +76,13 @@ import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 
 @Composable
 fun InsightsScreen(
-    onNavigateToTab: (Int) -> Unit = {}
+    onNavigateToTab: (Int) -> Unit = {},
+    onSignOut: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(2) }
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var dailyLogs by remember { mutableStateOf<List<DailyLogItem>>(emptyList()) }
+    var showSignOutDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         userProfile = FirebaseRepository.getUserProfile()
@@ -195,12 +197,13 @@ fun InsightsScreen(
                         color = Color(0xFF33262A)
                     )
 
-                    // Profile Avatar Circle
+                    // Profile Avatar Circle (Clickable for Sign Out)
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE8C2A0)),
+                            .background(Color(0xFFE8C2A0))
+                            .clickable { showSignOutDialog = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Canvas(modifier = Modifier.size(24.dp)) {
@@ -208,6 +211,47 @@ fun InsightsScreen(
                             drawCircle(color = Color(0xFF6B535E), radius = 14f, center = Offset(size.width * 0.5f, size.height * 0.9f))
                         }
                     }
+                }
+
+                // Sign Out Dialog
+                if (showSignOutDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showSignOutDialog = false },
+                        title = {
+                            Text(
+                                text = "Cerrar sesión",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = Color(0xFF33262A)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = "¿Estás segura de que deseas cerrar sesión en Seluna?",
+                                fontSize = 14.sp,
+                                color = Color(0xFF6E6065)
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showSignOutDialog = false
+                                    FirebaseRepository.signOut()
+                                    onSignOut()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF805C6B))
+                            ) {
+                                Text("Cerrar Sesión", color = Color.White, fontSize = 13.sp)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showSignOutDialog = false }) {
+                                Text("Cancelar", color = Color(0xFF8C7F84), fontSize = 13.sp)
+                            }
+                        },
+                        containerColor = Color.White,
+                        shape = RoundedCornerShape(24.dp)
+                    )
                 }
 
                 // Header Title Section

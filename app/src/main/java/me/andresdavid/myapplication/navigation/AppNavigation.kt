@@ -94,6 +94,12 @@ fun AppNavigation(
             )
         }
 
+        val handleSignOut = {
+            navController.navigate(Screen.LOGIN) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+
         composable(Screen.HOME) {
             HomeScreen(
                 onNavigateToTab = { tabIndex ->
@@ -116,7 +122,8 @@ fun AppNavigation(
                         launchSingleTop = true
                         popUpTo(Screen.HOME)
                     }
-                }
+                },
+                onSignOut = { handleSignOut() }
             )
         }
 
@@ -142,7 +149,8 @@ fun AppNavigation(
                         launchSingleTop = true
                         popUpTo(Screen.HOME)
                     }
-                }
+                },
+                onSignOut = { handleSignOut() }
             )
         }
 
@@ -162,7 +170,8 @@ fun AppNavigation(
                             popUpTo(Screen.HOME)
                         }
                     }
-                }
+                },
+                onSignOut = { handleSignOut() }
             )
         }
 
@@ -184,11 +193,13 @@ fun AppNavigation(
                     }
                 },
                 onSaveLog = {
-                    navController.navigate(Screen.HOME) {
-                        launchSingleTop = true
-                        popUpTo(Screen.HOME)
+                    if (!navController.popBackStack(Screen.HOME, false)) {
+                        navController.navigate(Screen.HOME) {
+                            popUpTo(0)
+                        }
                     }
-                }
+                },
+                onSignOut = { handleSignOut() }
             )
         }
     }

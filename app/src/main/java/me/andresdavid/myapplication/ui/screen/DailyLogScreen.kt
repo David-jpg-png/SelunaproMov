@@ -85,7 +85,8 @@ enum class FlowLevel(val label: String) {
 @Composable
 fun DailyLogScreen(
     onNavigateToTab: (Int) -> Unit = {},
-    onSaveLog: () -> Unit = {}
+    onSaveLog: () -> Unit = {},
+    onSignOut: () -> Unit = {}
 ) {
     var selectedBottomNav by remember { mutableIntStateOf(3) } // "Registro" tab selected
     var flowLevel by remember { mutableStateOf(FlowLevel.NONE) }
@@ -94,23 +95,40 @@ fun DailyLogScreen(
     var medicationTaken by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var userProfile by remember { mutableStateOf<me.andresdavid.myapplication.data.UserProfile?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
+    var showSignOutDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    var logCalendar by remember { mutableStateOf(java.util.Calendar.getInstance()) }
+    val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+    val selectedDateStr = dateFormat.format(logCalendar.time)
+
+    val todayStr = dateFormat.format(java.util.Date())
+    val dateDisplayTitle = if (selectedDateStr == todayStr) {
+        "Hoy, " + java.text.SimpleDateFormat("d 'de' MMMM", java.util.Locale("es", "ES")).format(logCalendar.time)
+    } else {
+        java.text.SimpleDateFormat("EEEE, d 'de' MMMM", java.util.Locale("es", "ES")).format(logCalendar.time).replaceFirstChar { it.uppercase() }
+    }
+
+    LaunchedEffect(selectedDateStr) {
         val profile = me.andresdavid.myapplication.data.FirebaseRepository.getUserProfile()
         if (profile != null) {
             userProfile = profile
         }
         val logs = me.andresdavid.myapplication.data.FirebaseRepository.getDailyLogs()
-        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-        val todayStr = dateFormat.format(java.util.Date())
-        val existingLog = logs.find { it.date == todayStr }
+        val existingLog = logs.find { it.date == selectedDateStr }
         if (existingLog != null) {
             flowLevel = FlowLevel.entries.find { it.label == existingLog.flowLevel } ?: FlowLevel.NONE
             selectedSymptoms = existingLog.symptoms.toSet()
             selectedMoods = existingLog.moods.toSet()
             medicationTaken = existingLog.medicationTaken
             notes = existingLog.notes
+        } else {
+            flowLevel = FlowLevel.NONE
+            selectedSymptoms = emptySet()
+            selectedMoods = emptySet()
+            medicationTaken = false
+            notes = ""
         }
     }
 
@@ -209,12 +227,13 @@ fun DailyLogScreen(
                         color = Color(0xFF33262A)
                     )
 
-                    // Avatar Circle
+                    // Avatar Circle (Clickable for Sign Out)
                     Box(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE8C2A0)),
+                            .background(Color(0xFFE8C2A0))
+                            .clickable { showSignOutDialog = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Canvas(modifier = Modifier.size(24.dp)) {
@@ -222,6 +241,47 @@ fun DailyLogScreen(
                             drawCircle(color = Color(0xFF6B535E), radius = 14f, center = Offset(size.width * 0.9f, size.height * 0.9f))
                         }
                     }
+                }
+
+                // Sign Out Dialog
+                if (showSignOutDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showSignOutDialog = false },
+                        title = {
+                            Text(
+                                text = "Cerrar sesión",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = Color(0xFF33262A)
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = "¿Estás segura de que deseas cerrar sesión en Seluna?",
+                                fontSize = 14.sp,
+                                color = Color(0xFF6E6065)
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showSignOutDialog = false
+                                    me.andresdavid.myapplication.data.FirebaseRepository.signOut()
+                                    onSignOut()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF805C6B))
+                            ) {
+                                Text("Cerrar Sesión", color = Color.White, fontSize = 13.sp)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showSignOutDialog = false }) {
+                                Text("Cancelar", color = Color(0xFF8C7F84), fontSize = 13.sp)
+                            }
+                        },
+                        containerColor = Color.White,
+                        shape = RoundedCornerShape(24.dp)
+                    )
                 }
 
                 // Date Selector Header
@@ -254,12 +314,16 @@ fun DailyLogScreen(
                                 tint = Color(0xFF33262A),
                                 modifier = Modifier
                                     .size(28.dp)
-                                    .clickable { /* Prev day */ }
+                                    .clickable {
+                                        val newCal = logCalendar.clone() as java.util.Calendar
+                                        newCal.add(java.util.Calendar.DAY_OF_MONTH, -1)
+                                        logCalendar = newCal
+                                    }
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Hoy, 3 de Noviembre",
-                                fontSize = 18.sp,
+                                text = dateDisplayTitle,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF33262A)
                             )
@@ -270,7 +334,11 @@ fun DailyLogScreen(
                                 tint = Color(0xFF33262A),
                                 modifier = Modifier
                                     .size(28.dp)
-                                    .clickable { /* Next day */ }
+                                    .clickable {
+                                        val newCal = logCalendar.clone() as java.util.Calendar
+                                        newCal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                                        logCalendar = newCal
+                                    }
                             )
                         }
 
@@ -717,12 +785,12 @@ fun DailyLogScreen(
                 // Primary Action Button: ✓ Guardar Registro
                 Button(
                     onClick = {
+                        if (isSaving) return@Button
+                        isSaving = true
                         scope.launch {
-                            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                            val dateStr = dateFormat.format(java.util.Date())
                             val item = me.andresdavid.myapplication.data.DailyLogItem(
-                                id = dateStr,
-                                date = dateStr,
+                                id = selectedDateStr,
+                                date = selectedDateStr,
                                 flowLevel = flowLevel.label,
                                 symptoms = selectedSymptoms.toList(),
                                 moods = selectedMoods.toList(),
@@ -731,9 +799,11 @@ fun DailyLogScreen(
                                 timestamp = System.currentTimeMillis()
                             )
                             me.andresdavid.myapplication.data.FirebaseRepository.saveDailyLog(item)
+                            isSaving = false
                             onSaveLog()
                         }
                     },
+                    enabled = !isSaving,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -747,14 +817,16 @@ fun DailyLogScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        if (!isSaving) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         Text(
-                            text = "Guardar Registro",
+                            text = if (isSaving) "Guardando..." else "Guardar Registro",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
