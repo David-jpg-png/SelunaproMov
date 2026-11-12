@@ -93,10 +93,6 @@ fun HomeScreen(
     var showSignOutDialog by remember { mutableStateOf(false) }
     var aiTipText by remember { mutableStateOf<String?>(null) }
     var isAiLoading by remember { mutableStateOf(true) }
-    var userQuestion by remember { mutableStateOf("") }
-    var isAskingGemini by remember { mutableStateOf(false) }
-    var geminiAnswer by remember { mutableStateOf<String?>(null) }
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         isAiLoading = true
@@ -113,7 +109,11 @@ fun HomeScreen(
             phase = profile?.approach ?: "TRACK_CYCLE",
             symptoms = todayLog?.symptoms ?: emptyList(),
             moods = todayLog?.moods ?: emptyList(),
-            conditions = conds
+            conditions = conds,
+            goal = profile?.goal ?: "",
+            flowLevel = todayLog?.flowLevel ?: "",
+            contraceptive = profile?.contraceptive ?: "",
+            notes = todayLog?.notes ?: ""
         )
         aiTipText = generatedTip
         isAiLoading = false
@@ -864,7 +864,7 @@ fun HomeScreen(
                     }
                 }
 
-                // GEMINI AI Card in HomeScreen
+                // CONSEJO DE GEMINI AI Card (Consejo automático con la información del usuario)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -872,196 +872,91 @@ fun HomeScreen(
                     shape = RoundedCornerShape(22.dp),
                     color = Color(0xFFE2F0EC)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color.White),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = Color(0xFF2E594B),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = "GEMINI AI • CONSEJO DE SELUNA",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF2E594B),
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color(0xFF2E594B)
-                                    ) {
-                                        Text(
-                                            text = "Gemini 1.5",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = "Asistente de bienestar para $userName",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF386657)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Outlined.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color(0xFF2E594B),
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
-                        if (isAiLoading) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = Color(0xFF2E594B),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Gemini AI está analizando tu ciclo...",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF2E594B)
-                                )
-                            }
-                        } else {
-                            val defaultTipText = when {
-                                userConditions.isNotEmpty() ->
-                                    "Para tus condiciones de ${userConditions.joinToString()}: Prioriza hidratación constante, descanso restaurativo y actividades suaves."
-                                userProfile?.approach == "CONCEIVE" ->
-                                    "Tu enfoque es concebir: Registra diariamente tus sensaciones y monitorea tus ventanas de mayor fertilidad."
-                                userProfile?.approach == "PREVENT_PREGNANCY" ->
-                                    "Tu enfoque es prevenir embarazo: Revisa tus días clave y mantén al día tus registros de bienestar."
-                                else ->
-                                    "Sigue escuchando a tu cuerpo. Completa tus registros diarios para calibrar predicciones precisas con Seluna."
-                            }
-
-                            Text(
-                                text = aiTipText ?: defaultTipText,
-                                fontSize = 12.sp,
-                                color = Color(0xFF2E594B),
-                                lineHeight = 17.sp
-                            )
-                        }
-
-                        // Response to custom user query
-                        geminiAnswer?.let { answer ->
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color.White.copy(alpha = 0.85f),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "CONSEJO DE SELUNA • GEMINI AI",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2E594B),
+                                    letterSpacing = 0.5.sp
+                                )
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFF2E594B)
+                                ) {
                                     Text(
-                                        text = "Respuesta de Gemini AI:",
-                                        fontSize = 10.sp,
+                                        text = "Personalizado",
+                                        fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF2E594B)
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = answer,
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF33262A),
-                                        lineHeight = 16.sp
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                        // Interactive query input for Gemini
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedTextField(
-                                value = userQuestion,
-                                onValueChange = { userQuestion = it },
-                                placeholder = {
-                                    Text(
-                                        "Pregúntale algo a Gemini AI...",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF6E8079)
+                            if (isAiLoading) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        color = Color(0xFF2E594B),
+                                        strokeWidth = 2.dp
                                     )
-                                },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(24.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color.White,
-                                    unfocusedContainerColor = Color.White,
-                                    disabledContainerColor = Color.White,
-                                    focusedBorderColor = Color(0xFF2E594B),
-                                    unfocusedBorderColor = Color.Transparent
-                                )
-                            )
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Surface(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .clickable(enabled = userQuestion.isNotBlank() && !isAskingGemini) {
-                                        val query = userQuestion.trim()
-                                        if (query.isNotBlank()) {
-                                            isAskingGemini = true
-                                            coroutineScope.launch {
-                                                val resp = me.andresdavid.myapplication.data.GeminiService.askGemini(query)
-                                                geminiAnswer = resp
-                                                isAskingGemini = false
-                                                userQuestion = ""
-                                            }
-                                        }
-                                    },
-                                color = if (userQuestion.isNotBlank() && !isAskingGemini) Color(0xFF2E594B) else Color(0xFFB2C8C0)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    if (isAskingGemini) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            color = Color.White,
-                                            strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.Send,
-                                            contentDescription = "Enviar a Gemini",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Gemini AI analizando tus datos...",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF386657)
+                                    )
                                 }
+                            } else {
+                                val defaultTipText = when {
+                                    userConditions.isNotEmpty() ->
+                                        "Para tus condiciones de ${userConditions.joinToString()}: Prioriza hidratación constante, descanso restaurativo y actividades suaves."
+                                    userProfile?.approach == "CONCEIVE" ->
+                                        "Tu enfoque es concebir: Registra diariamente tus sensaciones y monitorea tus ventanas de mayor fertilidad."
+                                    userProfile?.approach == "PREVENT_PREGNANCY" ->
+                                        "Tu enfoque es prevenir embarazo: Revisa tus días clave y mantén al día tus registros de bienestar."
+                                    else ->
+                                        "Sigue escuchando a tu cuerpo. Completa tus registros diarios para calibrar predicciones precisas con Seluna."
+                                }
+
+                                Text(
+                                    text = aiTipText ?: defaultTipText,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF2E594B),
+                                    lineHeight = 17.sp
+                                )
                             }
                         }
                     }
