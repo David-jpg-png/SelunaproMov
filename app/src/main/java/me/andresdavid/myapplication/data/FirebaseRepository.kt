@@ -2,11 +2,12 @@ package me.andresdavid.myapplication.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -36,6 +37,8 @@ data class UserProfile(
 )
 
 object FirebaseRepository {
+    private const val TAG = "FirebaseRepository"
+
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 
@@ -190,12 +193,12 @@ object FirebaseRepository {
             cachedUserProfile = userProfile
             saveProfileToPrefs(userProfile)
 
-            withTimeoutOrNull(3000L) {
-                db.collection("users").document(uid).set(userProfile).await()
-            } ?: db.collection("users").document(uid).set(userProfile)
+            // Reliable Firestore write (queued locally and sent to Cloud)
+            db.collection("users").document(uid).set(userProfile)
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Error in signUp", e)
             Result.failure(e)
         }
     }
@@ -204,11 +207,17 @@ object FirebaseRepository {
         return try {
             cachedUserProfile = null
             cachedDailyLogs = null
+            prefs?.edit()?.clear()?.apply()
+            
             auth.signInWithEmailAndPassword(email, pass).await()
-            getUserProfile()
-            getDailyLogs()
+            
+            // Force fetch fresh profile & logs from Firestore Cloud for this signed in user
+            fetchProfileFromCloud()
+            fetchDailyLogsFromCloud()
+
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Error in signIn", e)
             Result.failure(e)
         }
     }
@@ -224,6 +233,7 @@ object FirebaseRepository {
         return try {
             val current = cachedUserProfile ?: loadProfileFromPrefs() ?: UserProfile(uid = uid, name = currentUserName)
             val updated = current.copy(
+                uid = uid,
                 approach = approach,
                 regularity = regularity,
                 contraceptive = contraceptive,
@@ -240,12 +250,13 @@ object FirebaseRepository {
                 "periodDays" to periodDays,
                 "conditions" to conditions
             )
-            withTimeoutOrNull(3000L) {
-                db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
-            } ?: db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge())
+            
+            // Send to Firestore Cloud reliably
+            db.collection("users").document(uid).set(updates, SetOptions.merge())
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Error saving natural rhythm", e)
             Result.failure(e)
         }
     }
@@ -258,6 +269,7 @@ object FirebaseRepository {
         return try {
             val current = cachedUserProfile ?: loadProfileFromPrefs() ?: UserProfile(uid = uid, name = currentUserName)
             val updated = current.copy(
+                uid = uid,
                 priorities = priorities,
                 notificationsEnabled = notificationsEnabled
             )
@@ -268,13 +280,51 @@ object FirebaseRepository {
                 "priorities" to priorities,
                 "notificationsEnabled" to notificationsEnabled
             )
-            withTimeoutOrNull(3000L) {
-                db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
-            } ?: db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge())
+
+            // Send to Firestore Cloud reliably
+            db.collection("users").document(uid).set(updates, SetOptions.merge())
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Error saving personalization", e)
             Result.failure(e)
+        }
+    }
+
+    private suspend fun fetchProfileFromCloud(): UserProfile? {
+        val uid = currentUserId ?: return null
+        val authUser = auth.currentUser
+        val email = authUser?.email ?: ""
+        val derivedName = authUser?.displayName?.ifBlank { null }
+            ?: email.substringBefore("@").takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
+            ?: "Usuario"
+
+        return try {
+            val docSnapshot = db.collection("users").document(uid).get().await()
+
+            if (docSnapshot != null && docSnapshot.exists()) {
+                val profile = UserProfile(
+                    uid = uid,
+                    name = docSnapshot.getString("name") ?: derivedName,
+                    email = docSnapshot.getString("email") ?: email,
+                    goal = docSnapshot.getString("goal") ?: "",
+                    approach = docSnapshot.getString("approach") ?: "TRACK_CYCLE",
+                    regularity = docSnapshot.getString("regularity") ?: "REGULAR",
+                    contraceptive = docSnapshot.getString("contraceptive") ?: "NONE",
+                    periodDays = (docSnapshot.get("periodDays") as? Number)?.toInt() ?: 5,
+                    conditions = (docSnapshot.get("conditions") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
+                    priorities = (docSnapshot.get("priorities") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
+                    notificationsEnabled = docSnapshot.getBoolean("notificationsEnabled") ?: true
+                )
+                cachedUserProfile = profile
+                saveProfileToPrefs(profile)
+                profile
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching profile from cloud", e)
+            null
         }
     }
 
@@ -285,9 +335,17 @@ object FirebaseRepository {
             return cachedUserProfile
         }
 
+        // Try cloud fetch
+        val cloudProfile = fetchProfileFromCloud()
+        if (cloudProfile != null) {
+            return cloudProfile
+        }
+
+        // Fallback to local prefs
         val localProfile = loadProfileFromPrefs()
         if (localProfile != null && localProfile.uid == uid && localProfile.name.isNotBlank()) {
             cachedUserProfile = localProfile
+            return localProfile
         }
 
         val authUser = auth.currentUser
@@ -296,56 +354,9 @@ object FirebaseRepository {
             ?: email.substringBefore("@").takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
             ?: "Usuario"
 
-        return try {
-            val docSnapshot = withTimeoutOrNull(8000L) {
-                db.collection("users").document(uid).get().await()
-            }
-
-            val profile = docSnapshot?.let { doc ->
-                if (!doc.exists()) null
-                else UserProfile(
-                    uid = uid,
-                    name = doc.getString("name") ?: derivedName,
-                    email = doc.getString("email") ?: email,
-                    goal = doc.getString("goal") ?: "",
-                    approach = doc.getString("approach") ?: "TRACK_CYCLE",
-                    regularity = doc.getString("regularity") ?: "REGULAR",
-                    contraceptive = doc.getString("contraceptive") ?: "NONE",
-                    periodDays = (doc.get("periodDays") as? Number)?.toInt() ?: 5,
-                    conditions = (doc.get("conditions") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
-                    priorities = (doc.get("priorities") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
-                    notificationsEnabled = doc.getBoolean("notificationsEnabled") ?: true
-                )
-            }
-
-            if (profile != null) {
-                val finalProfile = profile.copy(
-                    uid = uid,
-                    name = profile.name.ifBlank { derivedName },
-                    email = profile.email.ifBlank { email }
-                )
-                cachedUserProfile = finalProfile
-                saveProfileToPrefs(finalProfile)
-                finalProfile
-            } else if (cachedUserProfile != null) {
-                cachedUserProfile
-            } else {
-                val fallback = UserProfile(uid = uid, name = derivedName, email = email)
-                cachedUserProfile = fallback
-                saveProfileToPrefs(fallback)
-                fallback
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            if (cachedUserProfile != null) {
-                cachedUserProfile
-            } else {
-                val fallback = UserProfile(uid = uid, name = derivedName, email = email)
-                cachedUserProfile = fallback
-                saveProfileToPrefs(fallback)
-                fallback
-            }
-        }
+        val fallback = UserProfile(uid = uid, name = derivedName, email = email)
+        cachedUserProfile = fallback
+        return fallback
     }
 
     suspend fun saveDailyLog(log: DailyLogItem): Result<Unit> {
@@ -360,14 +371,8 @@ object FirebaseRepository {
             cachedDailyLogs = currentLogs
             saveLogsToPrefs(currentLogs)
 
-            withTimeoutOrNull(3000L) {
-                db.collection("users")
-                    .document(uid)
-                    .collection("daily_logs")
-                    .document(logId)
-                    .set(logToSave)
-                    .await()
-            } ?: db.collection("users")
+            // Reliable Cloud Write
+            db.collection("users")
                 .document(uid)
                 .collection("daily_logs")
                 .document(logId)
@@ -375,30 +380,19 @@ object FirebaseRepository {
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Error saving daily log", e)
             Result.failure(e)
         }
     }
 
-    suspend fun getDailyLogs(): List<DailyLogItem> {
+    private suspend fun fetchDailyLogsFromCloud(): List<DailyLogItem> {
         val uid = currentUserId ?: return emptyList()
-
-        if (cachedDailyLogs != null && cachedDailyLogs!!.isNotEmpty()) {
-            return cachedDailyLogs!!
-        }
-
-        val localLogs = loadLogsFromPrefs()
-        if (localLogs.isNotEmpty()) {
-            cachedDailyLogs = localLogs
-        }
-
         return try {
-            val snapshot = withTimeoutOrNull(8000L) {
-                db.collection("users")
-                    .document(uid)
-                    .collection("daily_logs")
-                    .get()
-                    .await()
-            }
+            val snapshot = db.collection("users")
+                .document(uid)
+                .collection("daily_logs")
+                .get()
+                .await()
 
             val logsList = snapshot?.documents?.mapNotNull { doc ->
                 if (!doc.exists()) null
@@ -418,12 +412,34 @@ object FirebaseRepository {
                 cachedDailyLogs = logsList.toMutableList()
                 saveLogsToPrefs(logsList)
             }
-
-            cachedDailyLogs ?: logsList
+            logsList
         } catch (e: Exception) {
-            e.printStackTrace()
-            cachedDailyLogs ?: emptyList()
+            Log.e(TAG, "Error fetching daily logs from cloud", e)
+            emptyList()
         }
+    }
+
+    suspend fun getDailyLogs(): List<DailyLogItem> {
+        if (currentUserId == null) return emptyList()
+
+        if (cachedDailyLogs != null && cachedDailyLogs!!.isNotEmpty()) {
+            return cachedDailyLogs!!
+        }
+
+        // Try cloud fetch
+        val cloudLogs = fetchDailyLogsFromCloud()
+        if (cloudLogs.isNotEmpty()) {
+            return cloudLogs
+        }
+
+        // Fallback to local prefs
+        val localLogs = loadLogsFromPrefs()
+        if (localLogs.isNotEmpty()) {
+            cachedDailyLogs = localLogs
+            return localLogs
+        }
+
+        return emptyList()
     }
 
     fun signOut() {
