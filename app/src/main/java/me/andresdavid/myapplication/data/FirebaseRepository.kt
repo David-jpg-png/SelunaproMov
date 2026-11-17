@@ -343,10 +343,14 @@ object FirebaseRepository {
             return cloudProfile
         }
 
-        // Fallback to local prefs
+        // Fallback to local prefs & auto-upload to Cloud
         val localProfile = loadProfileFromPrefs()
         if (localProfile != null && localProfile.uid == uid && localProfile.name.isNotBlank()) {
             cachedUserProfile = localProfile
+            // Auto-sync local profile to Cloud Firestore so other PCs/devices can access it!
+            runCatching {
+                db.collection("users").document(uid).set(localProfile, SetOptions.merge())
+            }
             return localProfile
         }
 
@@ -435,10 +439,23 @@ object FirebaseRepository {
             return cloudLogs
         }
 
-        // Fallback to local prefs
+        // Fallback to local prefs & auto-upload to Cloud
         val localLogs = loadLogsFromPrefs()
         if (localLogs.isNotEmpty()) {
             cachedDailyLogs = localLogs
+            // Auto-sync local daily logs to Cloud Firestore so other PCs/devices can access them!
+            val uid = currentUserId
+            if (uid != null) {
+                runCatching {
+                    for (log in localLogs) {
+                        db.collection("users")
+                            .document(uid)
+                            .collection("daily_logs")
+                            .document(log.id)
+                            .set(log, SetOptions.merge())
+                    }
+                }
+            }
             return localLogs
         }
 
