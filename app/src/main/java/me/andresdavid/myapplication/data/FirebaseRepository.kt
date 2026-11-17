@@ -289,4 +289,5 @@ object FirebaseRepository {
         cachedDailyLogs = null
         auth.signOut()
     }
+
 }
