@@ -175,7 +175,22 @@ object FirebaseRepository {
                 db.collection("users").document(uid).get().await()
             }
 
-            val profile = docSnapshot?.toObject(UserProfile::class.java)
+            val profile = docSnapshot?.let { doc ->
+                if (!doc.exists()) null
+                else UserProfile(
+                    uid = uid,
+                    name = doc.getString("name") ?: derivedName,
+                    email = doc.getString("email") ?: email,
+                    goal = doc.getString("goal") ?: "",
+                    approach = doc.getString("approach") ?: "TRACK_CYCLE",
+                    regularity = doc.getString("regularity") ?: "REGULAR",
+                    contraceptive = doc.getString("contraceptive") ?: "NONE",
+                    periodDays = (doc.get("periodDays") as? Number)?.toInt() ?: 5,
+                    conditions = (doc.get("conditions") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
+                    priorities = (doc.get("priorities") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
+                    notificationsEnabled = doc.getBoolean("notificationsEnabled") ?: true
+                )
+            }
 
             if (profile != null) {
                 val finalProfile = profile.copy(
@@ -250,7 +265,20 @@ object FirebaseRepository {
                     .await()
             }
 
-            val logsList = snapshot?.documents?.mapNotNull { it.toObject(DailyLogItem::class.java) } ?: emptyList()
+            val logsList = snapshot?.documents?.mapNotNull { doc ->
+                if (!doc.exists()) null
+                else DailyLogItem(
+                    id = doc.id,
+                    date = doc.getString("date") ?: doc.id,
+                    flowLevel = doc.getString("flowLevel") ?: "",
+                    symptoms = (doc.get("symptoms") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
+                    moods = (doc.get("moods") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList(),
+                    medicationTaken = doc.getBoolean("medicationTaken") ?: false,
+                    notes = doc.getString("notes") ?: "",
+                    timestamp = (doc.get("timestamp") as? Number)?.toLong() ?: System.currentTimeMillis()
+                )
+            } ?: emptyList()
+
             if (logsList.isNotEmpty()) {
                 cachedDailyLogs = logsList.toMutableList()
             }

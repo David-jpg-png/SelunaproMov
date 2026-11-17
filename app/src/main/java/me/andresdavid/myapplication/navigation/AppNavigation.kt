@@ -28,7 +28,7 @@ object Screen {
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) Screen.HOME else Screen.LOGIN
+    startDestination: String = Screen.LOGIN
 ) {
     NavHost(
         navController = navController,
