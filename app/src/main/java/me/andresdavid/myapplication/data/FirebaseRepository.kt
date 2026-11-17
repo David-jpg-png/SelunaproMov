@@ -10,7 +10,6 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
@@ -46,11 +45,23 @@ object FirebaseRepository {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 
     private var prefs: SharedPreferences? = null
+    private var appDb: AppDatabase? = null
+
     private var cachedUserProfile: UserProfile? = null
     private var cachedDailyLogs: MutableList<DailyLogItem>? = null
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("seluna_local_cache", Context.MODE_PRIVATE)
+        appDb = AppDatabase.getInstance(context)
+
+        val uid = currentUserId
+        if (!uid.isNullOrBlank()) {
+            val authUser = auth.currentUser
+            val email = authUser?.email ?: ""
+            val name = authUser?.displayName ?: "Test 1"
+            appDb?.seedIfEmpty(uid, email, name)
+        }
+
         cachedUserProfile = loadProfileFromPrefs()
         cachedDailyLogs = loadLogsFromPrefs()
     }
@@ -72,83 +83,9 @@ object FirebaseRepository {
             return "Usuario Test"
         }
 
-    private fun getSeedProfile(uid: String, email: String, name: String): UserProfile {
-        val displayName = if (name.isNotBlank() && name != "Usuario") name else if (email.contains("test", ignoreCase = true)) "Test 1" else "Test 1"
-        return UserProfile(
-            uid = uid,
-            name = displayName,
-            email = if (email.isNotBlank()) email else "test1@seluna.com",
-            goal = "Conocer y registrar mi ciclo menstrual",
-            approach = "TRACK_CYCLE",
-            regularity = "REGULAR",
-            contraceptive = "PILLS",
-            periodDays = 5,
-            conditions = listOf("Cólicos menstruales", "Sensibilidad hormonal"),
-            priorities = listOf("Alivio de dolor", "Seguimiento de ánimo", "Nutrición"),
-            notificationsEnabled = true
-        )
-    }
-
-    private fun getSeedLogs(): MutableList<DailyLogItem> {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val cal = Calendar.getInstance()
-
-        val todayStr = dateFormat.format(cal.time)
-
-        cal.add(Calendar.DAY_OF_MONTH, -1)
-        val yesterdayStr = dateFormat.format(cal.time)
-
-        cal.add(Calendar.DAY_OF_MONTH, -1)
-        val dayBeforeYesterdayStr = dateFormat.format(cal.time)
-
-        cal.add(Calendar.DAY_OF_MONTH, -1)
-        val threeDaysAgoStr = dateFormat.format(cal.time)
-
-        return mutableListOf(
-            DailyLogItem(
-                id = todayStr,
-                date = todayStr,
-                flowLevel = "Medio",
-                symptoms = listOf("Cólicos", "Fatiga", "Sensibilidad mamaria"),
-                moods = listOf("Tranquila", "Sensible"),
-                medicationTaken = true,
-                notes = "Registro diario de test1 - Sincronizado en Seluna.",
-                timestamp = System.currentTimeMillis()
-            ),
-            DailyLogItem(
-                id = yesterdayStr,
-                date = yesterdayStr,
-                flowLevel = "Abundante",
-                symptoms = listOf("Cólicos", "Dolor de cabeza", "Hinchazón"),
-                moods = listOf("Irritable", "Sensible"),
-                medicationTaken = true,
-                notes = "Día de mayor flujo, tomando té de manzanilla y descansando.",
-                timestamp = System.currentTimeMillis() - 86400000L
-            ),
-            DailyLogItem(
-                id = dayBeforeYesterdayStr,
-                date = dayBeforeYesterdayStr,
-                flowLevel = "Ligero",
-                symptoms = listOf("Fatiga", "Antojos"),
-                moods = listOf("Tranquila"),
-                medicationTaken = true,
-                notes = "Flujo ligero, nivel de energía estable.",
-                timestamp = System.currentTimeMillis() - 172800000L
-            ),
-            DailyLogItem(
-                id = threeDaysAgoStr,
-                date = threeDaysAgoStr,
-                flowLevel = "Ninguno",
-                symptoms = listOf("Acné"),
-                moods = listOf("Energética"),
-                medicationTaken = false,
-                notes = "Inicio de registro previo.",
-                timestamp = System.currentTimeMillis() - 259200000L
-            )
-        )
-    }
-
     private fun saveProfileToPrefs(profile: UserProfile) {
+        appDb?.saveUserProfile(profile)
+
         val p = prefs ?: return
         p.edit().apply {
             putString("uid_${profile.uid}", profile.uid)
@@ -168,6 +105,12 @@ object FirebaseRepository {
 
     private fun loadProfileFromPrefs(): UserProfile? {
         val uid = currentUserId ?: return null
+
+        val dbProfile = appDb?.getUserProfile(uid)
+        if (dbProfile != null && dbProfile.name.isNotBlank()) {
+            return dbProfile
+        }
+
         val p = prefs ?: return null
         val savedUid = p.getString("uid_$uid", "") ?: ""
         if (savedUid.isBlank()) return null
@@ -184,7 +127,7 @@ object FirebaseRepository {
         val priorities = if (prioritiesStr.isNotBlank()) prioritiesStr.split(";;;") else emptyList()
         val notificationsEnabled = p.getBoolean("notificationsEnabled_$uid", true)
 
-        return UserProfile(
+        val profile = UserProfile(
             uid = uid,
             name = name,
             email = email,
@@ -197,10 +140,18 @@ object FirebaseRepository {
             priorities = priorities,
             notificationsEnabled = notificationsEnabled
         )
+
+        appDb?.saveUserProfile(profile)
+        return profile
     }
 
     private fun saveLogsToPrefs(logs: List<DailyLogItem>) {
         val uid = currentUserId ?: return
+
+        logs.forEach { log ->
+            appDb?.saveDailyLog(uid, log)
+        }
+
         val p = prefs ?: return
         val jsonArray = JSONArray()
         logs.forEach { log ->
@@ -221,6 +172,12 @@ object FirebaseRepository {
 
     private fun loadLogsFromPrefs(): MutableList<DailyLogItem> {
         val uid = currentUserId ?: return mutableListOf()
+
+        val dbLogs = appDb?.getDailyLogs(uid)
+        if (!dbLogs.isNullOrEmpty()) {
+            return dbLogs.toMutableList()
+        }
+
         val p = prefs ?: return mutableListOf()
         val raw = p.getString("saved_daily_logs_$uid", "") ?: ""
         if (raw.isBlank()) return mutableListOf()
@@ -239,18 +196,18 @@ object FirebaseRepository {
                 if (moodsArr != null) {
                     for (j in 0 until moodsArr.length()) moodsList.add(moodsArr.getString(j))
                 }
-                list.add(
-                    DailyLogItem(
-                        id = obj.optString("id", ""),
-                        date = obj.optString("date", ""),
-                        flowLevel = obj.optString("flowLevel", ""),
-                        symptoms = symptomsList,
-                        moods = moodsList,
-                        medicationTaken = obj.optBoolean("medicationTaken", false),
-                        notes = obj.optString("notes", ""),
-                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
-                    )
+                val item = DailyLogItem(
+                    id = obj.optString("id", ""),
+                    date = obj.optString("date", ""),
+                    flowLevel = obj.optString("flowLevel", ""),
+                    symptoms = symptomsList,
+                    moods = moodsList,
+                    medicationTaken = obj.optBoolean("medicationTaken", false),
+                    notes = obj.optString("notes", ""),
+                    timestamp = obj.optLong("timestamp", System.currentTimeMillis())
                 )
+                list.add(item)
+                appDb?.saveDailyLog(uid, item)
             }
             list
         } catch (e: Exception) {
@@ -291,9 +248,14 @@ object FirebaseRepository {
         return try {
             cachedUserProfile = null
             cachedDailyLogs = null
-            
+
             auth.signInWithEmailAndPassword(email, pass).await()
-            
+
+            val uid = currentUserId
+            if (!uid.isNullOrBlank()) {
+                appDb?.seedIfEmpty(uid, email, auth.currentUser?.displayName ?: "Test 1")
+            }
+
             // Try Cloud Fetch first to get remote updates
             runCatching { fetchProfileFromCloud() }
             runCatching { fetchDailyLogsFromCloud() }
@@ -317,7 +279,7 @@ object FirebaseRepository {
     ): Result<Unit> {
         val uid = currentUserId ?: return Result.failure(Exception("Not logged in"))
         return try {
-            val current = cachedUserProfile ?: loadProfileFromPrefs() ?: getSeedProfile(uid, auth.currentUser?.email ?: "", currentUserName)
+            val current = cachedUserProfile ?: loadProfileFromPrefs() ?: UserProfile(uid = uid, name = currentUserName)
             val updated = current.copy(
                 uid = uid,
                 approach = approach,
@@ -336,7 +298,7 @@ object FirebaseRepository {
                 "periodDays" to periodDays,
                 "conditions" to conditions
             )
-            
+
             // Push to Cloud Firestore
             runCatching {
                 db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
@@ -355,7 +317,7 @@ object FirebaseRepository {
     ): Result<Unit> {
         val uid = currentUserId ?: return Result.failure(Exception("Not logged in"))
         return try {
-            val current = cachedUserProfile ?: loadProfileFromPrefs() ?: getSeedProfile(uid, auth.currentUser?.email ?: "", currentUserName)
+            val current = cachedUserProfile ?: loadProfileFromPrefs() ?: UserProfile(uid = uid, name = currentUserName)
             val updated = current.copy(
                 uid = uid,
                 priorities = priorities,
@@ -421,19 +383,16 @@ object FirebaseRepository {
     suspend fun getUserProfile(): UserProfile? {
         val uid = currentUserId ?: return null
 
+        val authUser = auth.currentUser
+        val email = authUser?.email ?: ""
+        val name = authUser?.displayName ?: "Test 1"
+        appDb?.seedIfEmpty(uid, email, name)
+
         if (cachedUserProfile != null && cachedUserProfile?.uid == uid && cachedUserProfile!!.name.isNotBlank() && cachedUserProfile!!.name != "Usuario") {
             return cachedUserProfile
         }
 
-        // 1. Try Cloud Fetch first so any PC gets synced remote updates
-        val cloudProfile = fetchProfileFromCloud()
-        if (cloudProfile != null && cloudProfile.name.isNotBlank()) {
-            cachedUserProfile = cloudProfile
-            saveProfileToPrefs(cloudProfile)
-            return cloudProfile
-        }
-
-        // 2. Try Local Prefs
+        // 1. Try Local SQLite Database first for instant offline/cache response
         val localProfile = loadProfileFromPrefs()
         if (localProfile != null && localProfile.uid == uid && localProfile.name.isNotBlank() && localProfile.name != "Usuario") {
             cachedUserProfile = localProfile
@@ -444,23 +403,41 @@ object FirebaseRepository {
             return localProfile
         }
 
-        // 3. Project Seed Data Fallback for test users / test1 across any PC
-        val authUser = auth.currentUser
-        val email = authUser?.email ?: ""
+        // 2. Try Cloud Fetch
+        val cloudProfile = fetchProfileFromCloud()
+        if (cloudProfile != null && cloudProfile.name.isNotBlank()) {
+            cachedUserProfile = cloudProfile
+            saveProfileToPrefs(cloudProfile)
+            return cloudProfile
+        }
+
+        // 3. Fallback
         val derivedName = authUser?.displayName?.ifBlank { null }
             ?: email.substringBefore("@").takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
             ?: "Test 1"
 
-        val seedProfile = getSeedProfile(uid, email, derivedName)
-        cachedUserProfile = seedProfile
-        saveProfileToPrefs(seedProfile)
+        val fallback = UserProfile(
+            uid = uid,
+            name = derivedName,
+            email = if (email.isNotBlank()) email else "test1@seluna.com",
+            goal = "Conocer y registrar mi ciclo menstrual",
+            approach = "TRACK_CYCLE",
+            regularity = "REGULAR",
+            contraceptive = "PILLS",
+            periodDays = 5,
+            conditions = listOf("Cólicos menstruales", "Sensibilidad hormonal"),
+            priorities = listOf("Alivio de dolor", "Seguimiento de ánimo", "Nutrición"),
+            notificationsEnabled = true
+        )
+        cachedUserProfile = fallback
+        saveProfileToPrefs(fallback)
 
-        // Sync seed profile to Cloud Firestore so all PCs get it
+        // Sync to Cloud Firestore
         runCatching {
-            db.collection("users").document(uid).set(seedProfile, SetOptions.merge())
+            db.collection("users").document(uid).set(fallback, SetOptions.merge())
         }
 
-        return seedProfile
+        return fallback
     }
 
     suspend fun saveDailyLog(log: DailyLogItem): Result<Unit> {
@@ -527,13 +504,35 @@ object FirebaseRepository {
     }
 
     suspend fun getDailyLogs(): List<DailyLogItem> {
-        if (currentUserId == null) return emptyList()
+        val uid = currentUserId ?: return emptyList()
+
+        val authUser = auth.currentUser
+        val email = authUser?.email ?: ""
+        val name = authUser?.displayName ?: "Test 1"
+        appDb?.seedIfEmpty(uid, email, name)
 
         if (cachedDailyLogs != null && cachedDailyLogs!!.isNotEmpty()) {
             return cachedDailyLogs!!
         }
 
-        // 1. Try Cloud Fetch first so PC 2 gets PC 1's saved logs
+        // 1. Try Local Database
+        val localLogs = loadLogsFromPrefs()
+        if (localLogs.isNotEmpty()) {
+            cachedDailyLogs = localLogs
+            // Auto-sync to Cloud Firestore in background
+            runCatching {
+                for (log in localLogs) {
+                    db.collection("users")
+                        .document(uid)
+                        .collection("daily_logs")
+                        .document(log.id)
+                        .set(log, SetOptions.merge())
+                }
+            }
+            return localLogs
+        }
+
+        // 2. Try Cloud Fetch
         val cloudLogs = fetchDailyLogsFromCloud()
         if (cloudLogs.isNotEmpty()) {
             cachedDailyLogs = cloudLogs.toMutableList()
@@ -541,44 +540,7 @@ object FirebaseRepository {
             return cloudLogs
         }
 
-        // 2. Try Local Prefs
-        val localLogs = loadLogsFromPrefs()
-        if (localLogs.isNotEmpty()) {
-            cachedDailyLogs = localLogs
-            // Auto-sync to Cloud Firestore in background
-            val uid = currentUserId
-            if (uid != null) {
-                runCatching {
-                    for (log in localLogs) {
-                        db.collection("users")
-                            .document(uid)
-                            .collection("daily_logs")
-                            .document(log.id)
-                            .set(log, SetOptions.merge())
-                    }
-                }
-            }
-            return localLogs
-        }
-
-        // 3. Project Seed Logs Fallback (for test users like test1 across any PC)
-        val uid = currentUserId ?: return emptyList()
-        val seedLogs = getSeedLogs()
-        cachedDailyLogs = seedLogs
-        saveLogsToPrefs(seedLogs)
-
-        // Sync seed logs to Cloud Firestore so all PCs stay in sync
-        runCatching {
-            for (log in seedLogs) {
-                db.collection("users")
-                    .document(uid)
-                    .collection("daily_logs")
-                    .document(log.id)
-                    .set(log, SetOptions.merge())
-            }
-        }
-
-        return seedLogs
+        return emptyList()
     }
 
     fun signOut() {
