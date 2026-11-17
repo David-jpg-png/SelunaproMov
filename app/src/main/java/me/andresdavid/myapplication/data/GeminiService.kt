@@ -5,10 +5,10 @@ import com.google.firebase.vertexai.vertexAI
 
 object GeminiService {
 
-    // Initialize Gemini 1.5 Flash using Firebase Vertex AI
+    // Initialize Gemini 2.0 Flash using Firebase Vertex AI
     private val generativeModel by lazy {
         Firebase.vertexAI.generativeModel(
-            modelName = "gemini-1.5-flash"
+            modelName = "gemini-2.0-flash"
         )
     }
 

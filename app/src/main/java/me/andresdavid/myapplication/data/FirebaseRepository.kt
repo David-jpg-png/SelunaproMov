@@ -196,8 +196,10 @@ object FirebaseRepository {
             cachedUserProfile = userProfile
             saveProfileToPrefs(userProfile)
 
-            // Guaranteed Cloud Write
-            db.collection("users").document(uid).set(userProfile).await()
+            // Try Cloud Write without failing local flow if Firestore API is unconfigured
+            runCatching {
+                db.collection("users").document(uid).set(userProfile).await()
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -213,9 +215,12 @@ object FirebaseRepository {
             
             auth.signInWithEmailAndPassword(email, pass).await()
             
-            // Force fetch fresh profile & logs directly from Firestore Cloud
-            fetchProfileFromCloud()
-            fetchDailyLogsFromCloud()
+            // Try Cloud Fetch first, fallback to local prefs
+            runCatching { fetchProfileFromCloud() }
+            runCatching { fetchDailyLogsFromCloud() }
+
+            getUserProfile()
+            getDailyLogs()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -253,8 +258,10 @@ object FirebaseRepository {
                 "conditions" to conditions
             )
             
-            // Guaranteed Cloud Write
-            db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
+            // Try Cloud Write without blocking local success
+            runCatching {
+                db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -283,8 +290,10 @@ object FirebaseRepository {
                 "notificationsEnabled" to notificationsEnabled
             )
 
-            // Guaranteed Cloud Write
-            db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
+            // Try Cloud Write without blocking local success
+            runCatching {
+                db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -337,21 +346,21 @@ object FirebaseRepository {
             return cachedUserProfile
         }
 
-        // Try cloud fetch
-        val cloudProfile = fetchProfileFromCloud()
-        if (cloudProfile != null) {
-            return cloudProfile
-        }
-
-        // Fallback to local prefs & auto-upload to Cloud
+        // Try local prefs first for instant response
         val localProfile = loadProfileFromPrefs()
         if (localProfile != null && localProfile.uid == uid && localProfile.name.isNotBlank()) {
             cachedUserProfile = localProfile
-            // Auto-sync local profile to Cloud Firestore so other PCs/devices can access it!
+            // Auto-sync to Cloud in background
             runCatching {
                 db.collection("users").document(uid).set(localProfile, SetOptions.merge())
             }
             return localProfile
+        }
+
+        // Try cloud fetch
+        val cloudProfile = fetchProfileFromCloud()
+        if (cloudProfile != null) {
+            return cloudProfile
         }
 
         val authUser = auth.currentUser
@@ -377,13 +386,15 @@ object FirebaseRepository {
             cachedDailyLogs = currentLogs
             saveLogsToPrefs(currentLogs)
 
-            // Guaranteed Cloud Write
-            db.collection("users")
-                .document(uid)
-                .collection("daily_logs")
-                .document(logId)
-                .set(logToSave)
-                .await()
+            // Try Cloud Write
+            runCatching {
+                db.collection("users")
+                    .document(uid)
+                    .collection("daily_logs")
+                    .document(logId)
+                    .set(logToSave)
+                    .await()
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -433,17 +444,11 @@ object FirebaseRepository {
             return cachedDailyLogs!!
         }
 
-        // Try cloud fetch
-        val cloudLogs = fetchDailyLogsFromCloud()
-        if (cloudLogs.isNotEmpty()) {
-            return cloudLogs
-        }
-
-        // Fallback to local prefs & auto-upload to Cloud
+        // Try local prefs first for instant response
         val localLogs = loadLogsFromPrefs()
         if (localLogs.isNotEmpty()) {
             cachedDailyLogs = localLogs
-            // Auto-sync local daily logs to Cloud Firestore so other PCs/devices can access them!
+            // Auto-sync local logs to Cloud in background
             val uid = currentUserId
             if (uid != null) {
                 runCatching {
@@ -457,6 +462,12 @@ object FirebaseRepository {
                 }
             }
             return localLogs
+        }
+
+        // Try cloud fetch
+        val cloudLogs = fetchDailyLogsFromCloud()
+        if (cloudLogs.isNotEmpty()) {
+            return cloudLogs
         }
 
         return emptyList()
