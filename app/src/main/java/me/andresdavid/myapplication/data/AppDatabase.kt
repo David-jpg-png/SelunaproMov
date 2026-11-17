@@ -15,6 +15,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
         private const val TAG = "AppDatabase"
         private const val DATABASE_NAME = "seluna_local_database.db"
         private const val DATABASE_VERSION = 1
+        private const val DEFAULT_TEST_UID = "test1_default_uid"
 
         // Users table
         private const val TABLE_USERS = "users"
@@ -97,11 +98,11 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
 
     // Insert or Update User Profile in Database
     fun saveUserProfile(profile: UserProfile) {
-        if (profile.uid.isBlank()) return
+        val targetUid = if (profile.uid.isNotBlank()) profile.uid else DEFAULT_TEST_UID
         try {
             val db = writableDatabase
             val values = ContentValues().apply {
-                put(COL_USER_UID, profile.uid)
+                put(COL_USER_UID, targetUid)
                 put(COL_USER_NAME, profile.name)
                 put(COL_USER_EMAIL, profile.email)
                 put(COL_USER_GOAL, profile.goal)
@@ -114,6 +115,12 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
                 put(COL_USER_NOTIFICATIONS, if (profile.notificationsEnabled) 1 else 0)
             }
             db.insertWithOnConflict(TABLE_USERS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+
+            // Also keep default test UID in sync if different
+            if (targetUid != DEFAULT_TEST_UID) {
+                val fallbackValues = ContentValues(values).apply { put(COL_USER_UID, DEFAULT_TEST_UID) }
+                db.insertWithOnConflict(TABLE_USERS, null, fallbackValues, SQLiteDatabase.CONFLICT_REPLACE)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error saving profile to database", e)
         }
@@ -121,14 +128,14 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
 
     // Retrieve User Profile from Database
     fun getUserProfile(uid: String): UserProfile? {
-        if (uid.isBlank()) return null
+        val targetUid = if (uid.isNotBlank()) uid else DEFAULT_TEST_UID
         try {
             val db = readableDatabase
             val cursor = db.query(
                 TABLE_USERS,
                 null,
                 "$COL_USER_UID = ?",
-                arrayOf(uid),
+                arrayOf(targetUid),
                 null,
                 null,
                 null
@@ -149,16 +156,16 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
                     val notificationsEnabled = c.getInt(c.getColumnIndexOrThrow(COL_USER_NOTIFICATIONS)) == 1
 
                     return UserProfile(
-                        uid = uid,
-                        name = name,
-                        email = email,
-                        goal = goal,
+                        uid = targetUid,
+                        name = if (name.isNotBlank()) name else "Test 1",
+                        email = if (email.isNotBlank()) email else "test1@seluna.com",
+                        goal = if (goal.isNotBlank()) goal else "Conocer y registrar mi ciclo menstrual",
                         approach = approach,
                         regularity = regularity,
                         contraceptive = contraceptive,
                         periodDays = if (periodDays > 0) periodDays else 5,
-                        conditions = conditions,
-                        priorities = priorities,
+                        conditions = if (conditions.isNotEmpty()) conditions else listOf("Cólicos menstruales", "Sensibilidad hormonal"),
+                        priorities = if (priorities.isNotEmpty()) priorities else listOf("Alivio de dolor", "Seguimiento de ánimo", "Nutrición"),
                         notificationsEnabled = notificationsEnabled
                     )
                 }
@@ -166,17 +173,24 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
         } catch (e: Exception) {
             Log.e(TAG, "Error getting user profile from database", e)
         }
+
+        // Fallback to default test UID if specific targetUid wasn't found yet
+        if (targetUid != DEFAULT_TEST_UID) {
+            return getUserProfile(DEFAULT_TEST_UID)
+        }
+
         return null
     }
 
     // Insert or Update Daily Log in Database
     fun saveDailyLog(userUid: String, log: DailyLogItem) {
-        if (userUid.isBlank() || log.id.isBlank()) return
+        val targetUid = if (userUid.isNotBlank()) userUid else DEFAULT_TEST_UID
+        if (log.id.isBlank()) return
         try {
             val db = writableDatabase
             val values = ContentValues().apply {
                 put(COL_LOG_ID, log.id)
-                put(COL_LOG_USER_UID, userUid)
+                put(COL_LOG_USER_UID, targetUid)
                 put(COL_LOG_DATE, log.date)
                 put(COL_LOG_FLOW, log.flowLevel)
                 put(COL_LOG_SYMPTOMS, log.symptoms.joinToString(";;;"))
@@ -186,6 +200,11 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
                 put(COL_LOG_TIMESTAMP, log.timestamp)
             }
             db.insertWithOnConflict(TABLE_LOGS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+
+            if (targetUid != DEFAULT_TEST_UID) {
+                val fallbackValues = ContentValues(values).apply { put(COL_LOG_USER_UID, DEFAULT_TEST_UID) }
+                db.insertWithOnConflict(TABLE_LOGS, null, fallbackValues, SQLiteDatabase.CONFLICT_REPLACE)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error saving log to database", e)
         }
@@ -193,7 +212,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
 
     // Retrieve all Daily Logs for a user from Database
     fun getDailyLogs(userUid: String): List<DailyLogItem> {
-        if (userUid.isBlank()) return emptyList()
+        val targetUid = if (userUid.isNotBlank()) userUid else DEFAULT_TEST_UID
         val list = mutableListOf<DailyLogItem>()
         try {
             val db = readableDatabase
@@ -201,7 +220,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
                 TABLE_LOGS,
                 null,
                 "$COL_LOG_USER_UID = ?",
-                arrayOf(userUid),
+                arrayOf(targetUid),
                 null,
                 null,
                 "$COL_LOG_DATE DESC"
@@ -236,17 +255,22 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
         } catch (e: Exception) {
             Log.e(TAG, "Error getting logs from database", e)
         }
+
+        if (list.isEmpty() && targetUid != DEFAULT_TEST_UID) {
+            return getDailyLogs(DEFAULT_TEST_UID)
+        }
+
         return list
     }
 
     // Populate default database seed records if database is empty for user
-    fun seedIfEmpty(uid: String, email: String, name: String) {
-        if (uid.isBlank()) return
-        val existingProfile = getUserProfile(uid)
-        if (existingProfile == null) {
+    fun seedIfEmpty(uid: String, email: String = "", name: String = "") {
+        val targetUid = if (uid.isNotBlank()) uid else DEFAULT_TEST_UID
+        val existingProfile = getUserProfile(targetUid)
+        if (existingProfile == null || existingProfile.name.isBlank() || existingProfile.name == "Usuario") {
             val displayName = if (name.isNotBlank() && name != "Usuario") name else "Test 1"
             val defaultProfile = UserProfile(
-                uid = uid,
+                uid = targetUid,
                 name = displayName,
                 email = if (email.isNotBlank()) email else "test1@seluna.com",
                 goal = "Conocer y registrar mi ciclo menstrual",
@@ -261,7 +285,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
             saveUserProfile(defaultProfile)
         }
 
-        val existingLogs = getDailyLogs(uid)
+        val existingLogs = getDailyLogs(targetUid)
         if (existingLogs.isEmpty()) {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val cal = Calendar.getInstance()
@@ -321,7 +345,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, n
             )
 
             seedLogs.forEach { log ->
-                saveDailyLog(uid, log)
+                saveDailyLog(targetUid, log)
             }
         }
     }
