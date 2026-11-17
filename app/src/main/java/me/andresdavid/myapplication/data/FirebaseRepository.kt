@@ -3,7 +3,6 @@ package me.andresdavid.myapplication.data
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -46,8 +45,13 @@ object FirebaseRepository {
         get() {
             val cachedName = cachedUserProfile?.name
             if (!cachedName.isNullOrBlank()) return cachedName
+
             val authName = auth.currentUser?.displayName
             if (!authName.isNullOrBlank()) return authName
+
+            val emailName = auth.currentUser?.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+            if (!emailName.isNullOrBlank()) return emailName
+
             return "Usuario"
         }
 
@@ -67,7 +71,7 @@ object FirebaseRepository {
             val userProfile = UserProfile(uid = uid, name = name, email = email, goal = goal)
             cachedUserProfile = userProfile
 
-            withTimeoutOrNull(2000L) {
+            withTimeoutOrNull(3000L) {
                 db.collection("users").document(uid).set(userProfile).await()
             } ?: db.collection("users").document(uid).set(userProfile)
 
@@ -116,7 +120,7 @@ object FirebaseRepository {
                 "periodDays" to periodDays,
                 "conditions" to conditions
             )
-            withTimeoutOrNull(2000L) {
+            withTimeoutOrNull(3000L) {
                 db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
             } ?: db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge())
 
@@ -143,7 +147,7 @@ object FirebaseRepository {
                 "priorities" to priorities,
                 "notificationsEnabled" to notificationsEnabled
             )
-            withTimeoutOrNull(2000L) {
+            withTimeoutOrNull(3000L) {
                 db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
             } ?: db.collection("users").document(uid).set(updates, com.google.firebase.firestore.SetOptions.merge())
 
@@ -156,53 +160,44 @@ object FirebaseRepository {
     suspend fun getUserProfile(): UserProfile? {
         val uid = currentUserId ?: return null
 
-        // Return cached profile if complete
-        if (cachedUserProfile != null && cachedUserProfile?.uid == uid && !cachedUserProfile!!.name.isBlank()) {
+        if (cachedUserProfile != null && cachedUserProfile?.uid == uid && cachedUserProfile!!.name.isNotBlank() && cachedUserProfile!!.name != "Usuario") {
             return cachedUserProfile
         }
 
+        val authUser = auth.currentUser
+        val email = authUser?.email ?: ""
+        val derivedName = authUser?.displayName?.ifBlank { null }
+            ?: email.substringBefore("@").takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
+            ?: "Usuario"
+
         return try {
-            // Try local disk cache
-            val cacheSnapshot = runCatching {
-                db.collection("users").document(uid).get(Source.CACHE).await()
-            }.getOrNull()
-
-            var profile = cacheSnapshot?.toObject(UserProfile::class.java)
-
-            // Try server if cache is incomplete
-            if (profile == null || profile.name.isBlank()) {
-                val serverSnapshot = withTimeoutOrNull(2500L) {
-                    db.collection("users").document(uid).get(Source.SERVER).await()
-                }
-                if (serverSnapshot != null && serverSnapshot.exists()) {
-                    profile = serverSnapshot.toObject(UserProfile::class.java)
-                }
+            val docSnapshot = withTimeoutOrNull(8000L) {
+                db.collection("users").document(uid).get().await()
             }
 
-            val fallbackName = auth.currentUser?.displayName ?: ""
-            val fallbackEmail = auth.currentUser?.email ?: ""
+            val profile = docSnapshot?.toObject(UserProfile::class.java)
 
             if (profile != null) {
                 val finalProfile = profile.copy(
-                    name = profile.name.ifBlank { fallbackName },
-                    email = profile.email.ifBlank { fallbackEmail }
+                    uid = uid,
+                    name = profile.name.ifBlank { derivedName },
+                    email = profile.email.ifBlank { email }
                 )
                 cachedUserProfile = finalProfile
                 finalProfile
             } else if (cachedUserProfile != null) {
                 cachedUserProfile
             } else {
-                val fallback = UserProfile(uid = uid, name = fallbackName, email = fallbackEmail)
+                val fallback = UserProfile(uid = uid, name = derivedName, email = email)
                 cachedUserProfile = fallback
                 fallback
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             if (cachedUserProfile != null) {
                 cachedUserProfile
             } else {
-                val fallbackName = auth.currentUser?.displayName ?: ""
-                val fallbackEmail = auth.currentUser?.email ?: ""
-                val fallback = UserProfile(uid = uid, name = fallbackName, email = fallbackEmail)
+                val fallback = UserProfile(uid = uid, name = derivedName, email = email)
                 cachedUserProfile = fallback
                 fallback
             }
@@ -215,13 +210,12 @@ object FirebaseRepository {
             val logId = if (log.id.isNotEmpty()) log.id else log.date.ifEmpty { System.currentTimeMillis().toString() }
             val logToSave = log.copy(id = logId)
 
-            // Update in-memory cache immediately
             val currentLogs = cachedDailyLogs ?: mutableListOf()
             currentLogs.removeAll { it.id == logId || it.date == logToSave.date }
             currentLogs.add(logToSave)
             cachedDailyLogs = currentLogs
 
-            withTimeoutOrNull(2000L) {
+            withTimeoutOrNull(3000L) {
                 db.collection("users")
                     .document(uid)
                     .collection("daily_logs")
@@ -248,38 +242,22 @@ object FirebaseRepository {
         }
 
         return try {
-            // Try local disk cache
-            val cacheSnapshot = runCatching {
+            val snapshot = withTimeoutOrNull(8000L) {
                 db.collection("users")
                     .document(uid)
                     .collection("daily_logs")
-                    .get(Source.CACHE)
-                    .await()
-            }.getOrNull()
-
-            val cachedList = cacheSnapshot?.documents?.mapNotNull { it.toObject(DailyLogItem::class.java) }
-
-            if (cachedList != null && cachedList.isNotEmpty()) {
-                cachedDailyLogs = cachedList.toMutableList()
-                return cachedDailyLogs!!
-            }
-
-            // Try server
-            val serverSnapshot = withTimeoutOrNull(3000L) {
-                db.collection("users")
-                    .document(uid)
-                    .collection("daily_logs")
-                    .get(Source.SERVER)
+                    .get()
                     .await()
             }
 
-            val serverList = serverSnapshot?.documents?.mapNotNull { it.toObject(DailyLogItem::class.java) } ?: emptyList()
-            if (serverList.isNotEmpty()) {
-                cachedDailyLogs = serverList.toMutableList()
+            val logsList = snapshot?.documents?.mapNotNull { it.toObject(DailyLogItem::class.java) } ?: emptyList()
+            if (logsList.isNotEmpty()) {
+                cachedDailyLogs = logsList.toMutableList()
             }
 
-            cachedDailyLogs ?: emptyList()
+            cachedDailyLogs ?: logsList
         } catch (e: Exception) {
+            e.printStackTrace()
             cachedDailyLogs ?: emptyList()
         }
     }
@@ -289,5 +267,4 @@ object FirebaseRepository {
         cachedDailyLogs = null
         auth.signOut()
     }
-
 }
