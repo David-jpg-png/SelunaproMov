@@ -10,6 +10,7 @@ import me.andresdavid.myapplication.ui.theme.SelunaProyectoTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        me.andresdavid.myapplication.data.FirebaseRepository.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             SelunaProyectoTheme {

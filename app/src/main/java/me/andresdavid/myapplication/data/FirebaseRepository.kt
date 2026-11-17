@@ -1,10 +1,14 @@
 package me.andresdavid.myapplication.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class DailyLogItem(
     val id: String = "",
@@ -35,8 +39,15 @@ object FirebaseRepository {
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 
+    private var prefs: SharedPreferences? = null
     private var cachedUserProfile: UserProfile? = null
     private var cachedDailyLogs: MutableList<DailyLogItem>? = null
+
+    fun init(context: Context) {
+        prefs = context.getSharedPreferences("seluna_local_cache", Context.MODE_PRIVATE)
+        cachedUserProfile = loadProfileFromPrefs()
+        cachedDailyLogs = loadLogsFromPrefs()
+    }
 
     val currentUserId: String?
         get() = auth.currentUser?.uid
@@ -55,6 +66,113 @@ object FirebaseRepository {
             return "Usuario"
         }
 
+    private fun saveProfileToPrefs(profile: UserProfile) {
+        val p = prefs ?: return
+        p.edit().apply {
+            putString("uid", profile.uid)
+            putString("name", profile.name)
+            putString("email", profile.email)
+            putString("goal", profile.goal)
+            putString("approach", profile.approach)
+            putString("regularity", profile.regularity)
+            putString("contraceptive", profile.contraceptive)
+            putInt("periodDays", profile.periodDays)
+            putString("conditions", profile.conditions.joinToString(";;;"))
+            putString("priorities", profile.priorities.joinToString(";;;"))
+            putBoolean("notificationsEnabled", profile.notificationsEnabled)
+            apply()
+        }
+    }
+
+    private fun loadProfileFromPrefs(): UserProfile? {
+        val p = prefs ?: return null
+        val uid = p.getString("uid", "") ?: ""
+        if (uid.isBlank()) return null
+        val name = p.getString("name", "") ?: ""
+        val email = p.getString("email", "") ?: ""
+        val goal = p.getString("goal", "") ?: ""
+        val approach = p.getString("approach", "TRACK_CYCLE") ?: "TRACK_CYCLE"
+        val regularity = p.getString("regularity", "REGULAR") ?: "REGULAR"
+        val contraceptive = p.getString("contraceptive", "NONE") ?: "NONE"
+        val periodDays = p.getInt("periodDays", 5)
+        val conditionsStr = p.getString("conditions", "") ?: ""
+        val conditions = if (conditionsStr.isNotBlank()) conditionsStr.split(";;;") else emptyList()
+        val prioritiesStr = p.getString("priorities", "") ?: ""
+        val priorities = if (prioritiesStr.isNotBlank()) prioritiesStr.split(";;;") else emptyList()
+        val notificationsEnabled = p.getBoolean("notificationsEnabled", true)
+
+        return UserProfile(
+            uid = uid,
+            name = name,
+            email = email,
+            goal = goal,
+            approach = approach,
+            regularity = regularity,
+            contraceptive = contraceptive,
+            periodDays = periodDays,
+            conditions = conditions,
+            priorities = priorities,
+            notificationsEnabled = notificationsEnabled
+        )
+    }
+
+    private fun saveLogsToPrefs(logs: List<DailyLogItem>) {
+        val p = prefs ?: return
+        val jsonArray = JSONArray()
+        logs.forEach { log ->
+            val obj = JSONObject().apply {
+                put("id", log.id)
+                put("date", log.date)
+                put("flowLevel", log.flowLevel)
+                put("symptoms", JSONArray(log.symptoms))
+                put("moods", JSONArray(log.moods))
+                put("medicationTaken", log.medicationTaken)
+                put("notes", log.notes)
+                put("timestamp", log.timestamp)
+            }
+            jsonArray.put(obj)
+        }
+        p.edit().putString("saved_daily_logs", jsonArray.toString()).apply()
+    }
+
+    private fun loadLogsFromPrefs(): MutableList<DailyLogItem> {
+        val p = prefs ?: return mutableListOf()
+        val raw = p.getString("saved_daily_logs", "") ?: ""
+        if (raw.isBlank()) return mutableListOf()
+        val list = mutableListOf<DailyLogItem>()
+        return try {
+            val jsonArray = JSONArray(raw)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val symptomsArr = obj.optJSONArray("symptoms")
+                val symptomsList = mutableListOf<String>()
+                if (symptomsArr != null) {
+                    for (j in 0 until symptomsArr.length()) symptomsList.add(symptomsArr.getString(j))
+                }
+                val moodsArr = obj.optJSONArray("moods")
+                val moodsList = mutableListOf<String>()
+                if (moodsArr != null) {
+                    for (j in 0 until moodsArr.length()) moodsList.add(moodsArr.getString(j))
+                }
+                list.add(
+                    DailyLogItem(
+                        id = obj.optString("id", ""),
+                        date = obj.optString("date", ""),
+                        flowLevel = obj.optString("flowLevel", ""),
+                        symptoms = symptomsList,
+                        moods = moodsList,
+                        medicationTaken = obj.optBoolean("medicationTaken", false),
+                        notes = obj.optString("notes", ""),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            mutableListOf()
+        }
+    }
+
     suspend fun signUp(email: String, pass: String, name: String, goal: String): Result<Unit> {
         return try {
             val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
@@ -70,6 +188,7 @@ object FirebaseRepository {
 
             val userProfile = UserProfile(uid = uid, name = name, email = email, goal = goal)
             cachedUserProfile = userProfile
+            saveProfileToPrefs(userProfile)
 
             withTimeoutOrNull(3000L) {
                 db.collection("users").document(uid).set(userProfile).await()
@@ -103,7 +222,7 @@ object FirebaseRepository {
     ): Result<Unit> {
         val uid = currentUserId ?: return Result.failure(Exception("Not logged in"))
         return try {
-            val current = cachedUserProfile ?: UserProfile(uid = uid, name = currentUserName)
+            val current = cachedUserProfile ?: loadProfileFromPrefs() ?: UserProfile(uid = uid, name = currentUserName)
             val updated = current.copy(
                 approach = approach,
                 regularity = regularity,
@@ -112,6 +231,7 @@ object FirebaseRepository {
                 conditions = conditions
             )
             cachedUserProfile = updated
+            saveProfileToPrefs(updated)
 
             val updates = mapOf(
                 "approach" to approach,
@@ -136,12 +256,13 @@ object FirebaseRepository {
     ): Result<Unit> {
         val uid = currentUserId ?: return Result.failure(Exception("Not logged in"))
         return try {
-            val current = cachedUserProfile ?: UserProfile(uid = uid, name = currentUserName)
+            val current = cachedUserProfile ?: loadProfileFromPrefs() ?: UserProfile(uid = uid, name = currentUserName)
             val updated = current.copy(
                 priorities = priorities,
                 notificationsEnabled = notificationsEnabled
             )
             cachedUserProfile = updated
+            saveProfileToPrefs(updated)
 
             val updates = mapOf(
                 "priorities" to priorities,
@@ -162,6 +283,11 @@ object FirebaseRepository {
 
         if (cachedUserProfile != null && cachedUserProfile?.uid == uid && cachedUserProfile!!.name.isNotBlank() && cachedUserProfile!!.name != "Usuario") {
             return cachedUserProfile
+        }
+
+        val localProfile = loadProfileFromPrefs()
+        if (localProfile != null && localProfile.uid == uid && localProfile.name.isNotBlank()) {
+            cachedUserProfile = localProfile
         }
 
         val authUser = auth.currentUser
@@ -199,12 +325,14 @@ object FirebaseRepository {
                     email = profile.email.ifBlank { email }
                 )
                 cachedUserProfile = finalProfile
+                saveProfileToPrefs(finalProfile)
                 finalProfile
             } else if (cachedUserProfile != null) {
                 cachedUserProfile
             } else {
                 val fallback = UserProfile(uid = uid, name = derivedName, email = email)
                 cachedUserProfile = fallback
+                saveProfileToPrefs(fallback)
                 fallback
             }
         } catch (e: Exception) {
@@ -214,6 +342,7 @@ object FirebaseRepository {
             } else {
                 val fallback = UserProfile(uid = uid, name = derivedName, email = email)
                 cachedUserProfile = fallback
+                saveProfileToPrefs(fallback)
                 fallback
             }
         }
@@ -225,10 +354,11 @@ object FirebaseRepository {
             val logId = if (log.id.isNotEmpty()) log.id else log.date.ifEmpty { System.currentTimeMillis().toString() }
             val logToSave = log.copy(id = logId)
 
-            val currentLogs = cachedDailyLogs ?: mutableListOf()
+            val currentLogs = cachedDailyLogs ?: loadLogsFromPrefs()
             currentLogs.removeAll { it.id == logId || it.date == logToSave.date }
             currentLogs.add(logToSave)
             cachedDailyLogs = currentLogs
+            saveLogsToPrefs(currentLogs)
 
             withTimeoutOrNull(3000L) {
                 db.collection("users")
@@ -256,6 +386,11 @@ object FirebaseRepository {
             return cachedDailyLogs!!
         }
 
+        val localLogs = loadLogsFromPrefs()
+        if (localLogs.isNotEmpty()) {
+            cachedDailyLogs = localLogs
+        }
+
         return try {
             val snapshot = withTimeoutOrNull(8000L) {
                 db.collection("users")
@@ -281,6 +416,7 @@ object FirebaseRepository {
 
             if (logsList.isNotEmpty()) {
                 cachedDailyLogs = logsList.toMutableList()
+                saveLogsToPrefs(logsList)
             }
 
             cachedDailyLogs ?: logsList
@@ -293,6 +429,7 @@ object FirebaseRepository {
     fun signOut() {
         cachedUserProfile = null
         cachedDailyLogs = null
+        prefs?.edit()?.clear()?.apply()
         auth.signOut()
     }
 }
