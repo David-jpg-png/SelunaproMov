@@ -72,37 +72,38 @@ object FirebaseRepository {
     private fun saveProfileToPrefs(profile: UserProfile) {
         val p = prefs ?: return
         p.edit().apply {
-            putString("uid", profile.uid)
-            putString("name", profile.name)
-            putString("email", profile.email)
-            putString("goal", profile.goal)
-            putString("approach", profile.approach)
-            putString("regularity", profile.regularity)
-            putString("contraceptive", profile.contraceptive)
-            putInt("periodDays", profile.periodDays)
-            putString("conditions", profile.conditions.joinToString(";;;"))
-            putString("priorities", profile.priorities.joinToString(";;;"))
-            putBoolean("notificationsEnabled", profile.notificationsEnabled)
+            putString("uid_${profile.uid}", profile.uid)
+            putString("name_${profile.uid}", profile.name)
+            putString("email_${profile.uid}", profile.email)
+            putString("goal_${profile.uid}", profile.goal)
+            putString("approach_${profile.uid}", profile.approach)
+            putString("regularity_${profile.uid}", profile.regularity)
+            putString("contraceptive_${profile.uid}", profile.contraceptive)
+            putInt("periodDays_${profile.uid}", profile.periodDays)
+            putString("conditions_${profile.uid}", profile.conditions.joinToString(";;;"))
+            putString("priorities_${profile.uid}", profile.priorities.joinToString(";;;"))
+            putBoolean("notificationsEnabled_${profile.uid}", profile.notificationsEnabled)
             apply()
         }
     }
 
     private fun loadProfileFromPrefs(): UserProfile? {
+        val uid = currentUserId ?: return null
         val p = prefs ?: return null
-        val uid = p.getString("uid", "") ?: ""
-        if (uid.isBlank()) return null
-        val name = p.getString("name", "") ?: ""
-        val email = p.getString("email", "") ?: ""
-        val goal = p.getString("goal", "") ?: ""
-        val approach = p.getString("approach", "TRACK_CYCLE") ?: "TRACK_CYCLE"
-        val regularity = p.getString("regularity", "REGULAR") ?: "REGULAR"
-        val contraceptive = p.getString("contraceptive", "NONE") ?: "NONE"
-        val periodDays = p.getInt("periodDays", 5)
-        val conditionsStr = p.getString("conditions", "") ?: ""
+        val savedUid = p.getString("uid_$uid", "") ?: ""
+        if (savedUid.isBlank()) return null
+        val name = p.getString("name_$uid", "") ?: ""
+        val email = p.getString("email_$uid", "") ?: ""
+        val goal = p.getString("goal_$uid", "") ?: ""
+        val approach = p.getString("approach_$uid", "TRACK_CYCLE") ?: "TRACK_CYCLE"
+        val regularity = p.getString("regularity_$uid", "REGULAR") ?: "REGULAR"
+        val contraceptive = p.getString("contraceptive_$uid", "NONE") ?: "NONE"
+        val periodDays = p.getInt("periodDays_$uid", 5)
+        val conditionsStr = p.getString("conditions_$uid", "") ?: ""
         val conditions = if (conditionsStr.isNotBlank()) conditionsStr.split(";;;") else emptyList()
-        val prioritiesStr = p.getString("priorities", "") ?: ""
+        val prioritiesStr = p.getString("priorities_$uid", "") ?: ""
         val priorities = if (prioritiesStr.isNotBlank()) prioritiesStr.split(";;;") else emptyList()
-        val notificationsEnabled = p.getBoolean("notificationsEnabled", true)
+        val notificationsEnabled = p.getBoolean("notificationsEnabled_$uid", true)
 
         return UserProfile(
             uid = uid,
@@ -120,6 +121,7 @@ object FirebaseRepository {
     }
 
     private fun saveLogsToPrefs(logs: List<DailyLogItem>) {
+        val uid = currentUserId ?: return
         val p = prefs ?: return
         val jsonArray = JSONArray()
         logs.forEach { log ->
@@ -135,12 +137,13 @@ object FirebaseRepository {
             }
             jsonArray.put(obj)
         }
-        p.edit().putString("saved_daily_logs", jsonArray.toString()).apply()
+        p.edit().putString("saved_daily_logs_$uid", jsonArray.toString()).apply()
     }
 
     private fun loadLogsFromPrefs(): MutableList<DailyLogItem> {
+        val uid = currentUserId ?: return mutableListOf()
         val p = prefs ?: return mutableListOf()
-        val raw = p.getString("saved_daily_logs", "") ?: ""
+        val raw = p.getString("saved_daily_logs_$uid", "") ?: ""
         if (raw.isBlank()) return mutableListOf()
         val list = mutableListOf<DailyLogItem>()
         return try {
@@ -193,8 +196,8 @@ object FirebaseRepository {
             cachedUserProfile = userProfile
             saveProfileToPrefs(userProfile)
 
-            // Reliable Firestore write (queued locally and sent to Cloud)
-            db.collection("users").document(uid).set(userProfile)
+            // Guaranteed Cloud Write
+            db.collection("users").document(uid).set(userProfile).await()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -207,11 +210,10 @@ object FirebaseRepository {
         return try {
             cachedUserProfile = null
             cachedDailyLogs = null
-            prefs?.edit()?.clear()?.apply()
             
             auth.signInWithEmailAndPassword(email, pass).await()
             
-            // Force fetch fresh profile & logs from Firestore Cloud for this signed in user
+            // Force fetch fresh profile & logs directly from Firestore Cloud
             fetchProfileFromCloud()
             fetchDailyLogsFromCloud()
 
@@ -251,8 +253,8 @@ object FirebaseRepository {
                 "conditions" to conditions
             )
             
-            // Send to Firestore Cloud reliably
-            db.collection("users").document(uid).set(updates, SetOptions.merge())
+            // Guaranteed Cloud Write
+            db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -281,8 +283,8 @@ object FirebaseRepository {
                 "notificationsEnabled" to notificationsEnabled
             )
 
-            // Send to Firestore Cloud reliably
-            db.collection("users").document(uid).set(updates, SetOptions.merge())
+            // Guaranteed Cloud Write
+            db.collection("users").document(uid).set(updates, SetOptions.merge()).await()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -371,12 +373,13 @@ object FirebaseRepository {
             cachedDailyLogs = currentLogs
             saveLogsToPrefs(currentLogs)
 
-            // Reliable Cloud Write
+            // Guaranteed Cloud Write
             db.collection("users")
                 .document(uid)
                 .collection("daily_logs")
                 .document(logId)
                 .set(logToSave)
+                .await()
 
             Result.success(Unit)
         } catch (e: Exception) {

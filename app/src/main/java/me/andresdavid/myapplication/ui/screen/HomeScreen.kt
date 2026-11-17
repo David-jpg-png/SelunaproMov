@@ -356,8 +356,14 @@ fun HomeScreen(
                             color = Color(0xFF33262A)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
+                        val formattedGoal = when (userProfile?.goal) {
+                            "CYCLE_TRACKING" -> "Seguimiento de ciclo"
+                            "PREGNANCY" -> "Quedar embarazada"
+                            "WELLNESS" -> "Bienestar y síntomas"
+                            else -> userProfile?.goal
+                        }
                         Text(
-                            text = if (userProfile?.goal?.isNotBlank() == true) "Objetivo: ${userProfile!!.goal}" else "Escucha a tu cuerpo en su ritmo natural.",
+                            text = if (!formattedGoal.isNullOrBlank()) "Objetivo: $formattedGoal" else "Escucha a tu cuerpo en su ritmo natural.",
                             fontSize = 13.sp,
                             color = Color(0xFF8C7F84)
                         )
